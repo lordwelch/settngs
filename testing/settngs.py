@@ -1,6 +1,63 @@
 from __future__ import annotations
 
 import pytest
+example: list[tuple[list[str], str, str]] = [
+    (
+        [],
+        'Hello world\n',
+        '',
+    ),
+    (
+        ['--hello', 'lordwelch'],
+        'Hello lordwelch\n',
+        '',
+    ),
+    (
+        ['--hello', 'lordwelch', '-s'],
+        'Hello lordwelch\nSuccessfully saved settings to settings.json\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  }\n}\n',
+    ),
+    (
+        [],
+        'Hello lordwelch\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  }\n}\n',
+    ),
+    (
+        ['-v'],
+        'Hello lordwelch\nmerged_namespace.values.example_verbose=True\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  }\n}\n',
+    ),
+    (
+        ['-v', '-s'],
+        'Hello lordwelch\nSuccessfully saved settings to settings.json\nmerged_namespace.values.example_verbose=True\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  }\n}\n',
+    ),
+    (
+        [],
+        'Hello lordwelch\nmerged_namespace.values.example_verbose=True\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  }\n}\n',
+    ),
+    (
+        ['--no-verbose'],
+        'Hello lordwelch\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  }\n}\n',
+    ),
+    (
+        ['--no-verbose', '-s'],
+        'Hello lordwelch\nSuccessfully saved settings to settings.json\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  }\n}\n',
+    ),
+    (
+        ['--hello', 'world', '--no-verbose', '-s'],
+        'Hello world\nSuccessfully saved settings to settings.json\n',
+        '{\n  "example": {\n    "hello": "world",\n    "verbose": false\n  }\n}\n',
+    ),
+    (
+        [],
+        'Hello world\n',
+        '{\n  "example": {\n    "hello": "world",\n    "verbose": false\n  }\n}\n',
+    ),
+]
 success = [
     (
         (

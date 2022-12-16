@@ -24,27 +24,27 @@ $ python -m settngs --hello lordwelch
 Hello lordwelch
 $ python -m settngs --hello lordwelch -s
 Hello lordwelch
-Successfully saved settngs to settngs.json
+Successfully saved settings to settings.json
 $ python -m settngs
 Hello lordwelch
 $ python -m settngs -v
 Hello lordwelch
-merged_namespace.example_verbose=True
+merged_namespace.values.example_verbose=True
 $ python -m settngs -v -s
 Hello lordwelch
-Successfully saved settngs to settngs.json
-merged_namespace.example_verbose=True
+Successfully saved settings to settings.json
+merged_namespace.values.example_verbose=True
 $ python -m settngs
 Hello lordwelch
-merged_namespace.example_verbose=True
+merged_namespace.values.example_verbose=True
 $ python -m settngs --no-verbose
 Hello lordwelch
 $ python -m settngs --no-verbose -s
 Hello lordwelch
-Successfully saved settngs to settngs.json
+Successfully saved settings to settings.json
 $ python -m settngs --hello world --no-verbose -s
 Hello world
-Successfully saved settngs to settngs.json
+Successfully saved settings to settings.json
 $ python -m settngs
 Hello world
 ```

@@ -6,6 +6,7 @@ import json
 import pytest
 
 import settngs
+from testing.settngs import example
 from testing.settngs import failure
 from testing.settngs import success
 
@@ -20,6 +21,19 @@ def test_settngs_manager():
     manager = settngs.Manager()
     defaults = manager.defaults()
     assert manager is not None and defaults is not None
+
+
+def test_settngs_manager_config():
+    manager = settngs.Manager(
+        definitions=settngs.Config[settngs.Namespace](
+            settngs.Namespace(),
+            {'tst': {'test': settngs.Setting('--test', default='hello', group='tst', exclusive=False)}},
+        ),
+    )
+
+    defaults = manager.defaults()
+    assert manager is not None and defaults is not None
+    assert defaults.values['tst']['test'] == 'hello'
 
 
 @pytest.mark.parametrize('arguments, expected', success)
@@ -39,25 +53,31 @@ def test_add_setting(settngs_manager):
 
 def test_get_defaults(settngs_manager):
     settngs_manager.add_setting('--test', default='hello')
-    defaults = settngs_manager.defaults()
+    defaults, _ = settngs_manager.defaults()
     assert defaults['']['test'] == 'hello'
 
 
 def test_get_namespace(settngs_manager):
     settngs_manager.add_setting('--test', default='hello')
-    defaults = settngs_manager.get_namespace(settngs_manager.defaults())
+    defaults, _ = settngs_manager.get_namespace(settngs_manager.defaults())
+    assert defaults.test == 'hello'
+
+
+def test_get_namespace_with_namespace(settngs_manager):
+    settngs_manager.add_setting('--test', default='hello')
+    defaults, _ = settngs_manager.get_namespace(argparse.Namespace(test='hello'))
     assert defaults.test == 'hello'
 
 
 def test_get_defaults_group(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
-    defaults = settngs_manager.defaults()
+    defaults, _ = settngs_manager.defaults()
     assert defaults['tst']['test'] == 'hello'
 
 
 def test_get_namespace_group(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
-    defaults = settngs_manager.get_namespace(settngs_manager.defaults())
+    defaults, _ = settngs_manager.get_namespace(settngs_manager.defaults())
     assert defaults.tst_test == 'hello'
 
 
@@ -65,8 +85,8 @@ def test_cmdline_only(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', file=False))
     settngs_manager.add_group('tst2', lambda parser: parser.add_setting('--test2', default='hello', cmdline=False))
 
-    file_normalized, _ = settngs_manager.normalize_config({}, file=True)
-    cmdline_normalized, _ = settngs_manager.normalize_config({}, cmdline=True)
+    file_normalized, _ = settngs_manager.normalize_config(settngs_manager.defaults(), file=True)
+    cmdline_normalized, _ = settngs_manager.normalize_config(settngs_manager.defaults(), cmdline=True)
 
     assert 'test' in cmdline_normalized['tst']
     assert 'test2' not in cmdline_normalized['tst2']
@@ -79,13 +99,14 @@ def test_normalize(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
 
     defaults = settngs_manager.defaults()
-    defaults['test'] = 'fail'  # Not defined in settngs_manager
+    defaults.values['test'] = 'fail'  # Not defined in settngs_manager
 
-    defaults_namespace = settngs_manager.get_namespace(defaults)
-    defaults_namespace.test = 'fail'
+    defaults_namespace = settngs_manager.get_namespace(settngs_manager.defaults())
+    defaults_namespace.values.test = 'fail'
 
     normalized, _ = settngs_manager.normalize_config(defaults, file=True)
-    normalized_namespace = settngs_manager.get_namespace(settngs_manager.normalize_config(defaults, file=True)[0])
+    normalized_from_namespace = settngs_manager.normalize_config(defaults_namespace, file=True)
+    normalized_namespace, _ = settngs_manager.get_namespace(normalized_from_namespace)
 
     assert 'test' not in normalized
     assert 'tst' in normalized
@@ -100,7 +121,7 @@ def test_normalize(settngs_manager):
 def test_clean_config(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=False))
     settngs_manager.add_group('tst2', lambda parser: parser.add_setting('--test2', default='hello', file=False))
-    normalized = settngs_manager.defaults()
+    normalized, _ = settngs_manager.defaults()
     normalized['tst']['test'] = 'success'
     normalized['fail'] = 'fail'
 
@@ -114,7 +135,18 @@ def test_clean_config(settngs_manager):
 def test_parse_cmdline(settngs_manager, tmp_path):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=True))
 
-    normalized = settngs_manager.parse_cmdline(['--test', 'success'])
+    normalized, _ = settngs_manager.parse_cmdline(['--test', 'success'])
+
+    assert 'test' in normalized['tst']
+    assert normalized['tst']['test'] == 'success'
+
+
+def test_parse_cmdline_with_namespace(settngs_manager, tmp_path):
+    settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=True))
+
+    normalized, _ = settngs_manager.parse_cmdline(
+        ['--test', 'success'], namespace=settngs.Config({'tst': {'test': 'fail'}}, settngs_manager.definitions),
+    )
 
     assert 'test' in normalized['tst']
     assert normalized['tst']['test'] == 'success'
@@ -128,8 +160,8 @@ def test_parse_file(settngs_manager, tmp_path):
     normalized, success = settngs_manager.parse_file(settngs_file)
 
     assert success
-    assert 'test' in normalized['tst']
-    assert normalized['tst']['test'] == 'success'
+    assert 'test' in normalized[0]['tst']
+    assert normalized[0]['tst']['test'] == 'success'
 
 
 def test_parse_non_existent_file(settngs_manager, tmp_path):
@@ -138,9 +170,9 @@ def test_parse_non_existent_file(settngs_manager, tmp_path):
 
     normalized, success = settngs_manager.parse_file(settngs_file)
 
-    assert not success
-    assert 'test' in normalized['tst']
-    assert normalized['tst']['test'] == 'hello'
+    assert success
+    assert 'test' in normalized[0]['tst']
+    assert normalized[0]['tst']['test'] == 'hello'
 
 
 def test_parse_corrupt_file(settngs_manager, tmp_path):
@@ -151,54 +183,36 @@ def test_parse_corrupt_file(settngs_manager, tmp_path):
     normalized, success = settngs_manager.parse_file(settngs_file)
 
     assert not success
-    assert 'test' in normalized['tst']
-    assert normalized['tst']['test'] == 'hello'
+    assert 'test' in normalized[0]['tst']
+    assert normalized[0]['tst']['test'] == 'hello'
 
 
 def test_save_file(settngs_manager, tmp_path):
     settngs_file = tmp_path / 'settngs.json'
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=False))
-    normalized = settngs_manager.defaults()
+    normalized, _ = settngs_manager.defaults()
     normalized['tst']['test'] = 'success'
 
     success = settngs_manager.save_file(normalized, settngs_file)
     normalized, success_r = settngs_manager.parse_file(settngs_file)
 
     assert success and success_r
-    assert 'test' in normalized['tst']
-    assert normalized['tst']['test'] == 'success'
+    assert 'test' in normalized[0]['tst']
+    assert normalized[0]['tst']['test'] == 'success'
 
 
 def test_save_file_not_seriazable(settngs_manager, tmp_path):
     settngs_file = tmp_path / 'settngs.json'
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=False))
-    normalized = settngs_manager.defaults()
+    normalized, _ = settngs_manager.defaults()
     normalized['tst']['test'] = {'fail'}  # Sets are not serializabl
 
     success = settngs_manager.save_file(normalized, settngs_file)
     normalized, success_r = settngs_manager.parse_file(settngs_file)
 
     assert not (success and success_r)
-    assert 'test' in normalized['tst']
-    assert normalized['tst']['test'] == 'hello'
-
-
-@pytest.mark.parametrize(
-    'raw, raw2, expected',
-    [
-        ({'tst': {'test': 'fail'}}, argparse.Namespace(tst_test='success'), 'success'),
-        # hello is default so is not used in raw_options_2
-        ({'tst': {'test': 'success'}}, argparse.Namespace(tst_test='hello'), 'success'),
-        (argparse.Namespace(tst_test='fail'), {'tst': {'test': 'success'}}, 'success'),
-        (argparse.Namespace(tst_test='success'), {'tst': {'test': 'hello'}}, 'success'),
-    ],
-)
-def test_normalize_merge(raw, raw2, expected, settngs_manager):
-    settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
-
-    normalized, _ = settngs_manager.normalize_config(raw, file=True, raw_options_2=raw2)
-
-    assert normalized['tst']['test'] == expected
+    assert 'test' in normalized[0]['tst']
+    assert normalized[0]['tst']['test'] == 'hello'
 
 
 def test_cli_set(settngs_manager, tmp_path):
@@ -251,3 +265,15 @@ def test_cli_explicit_default(settngs_manager, tmp_path):
     assert success
     assert 'test' in normalized['tst']
     assert normalized['tst']['test'] == 'success'
+
+
+def test_example(capsys, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    settings_file = tmp_path / 'settings.json'
+    settings_file.touch()
+
+    for args, expected_out, expected_file in example:
+        settngs._main(args)
+        captured = capsys.readouterr()
+        assert captured.out == expected_out, args
+        assert settings_file.read_text() == expected_file, args
