@@ -15,47 +15,52 @@ example: list[tuple[list[str], str, str]] = [
     (
         ['--hello', 'lordwelch', '-s'],
         'Hello lordwelch\nSuccessfully saved settings to settings.json\n',
-        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  }\n}\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  },\n  "persistent": {\n    "test": false\n  }\n}\n',
     ),
     (
         [],
         'Hello lordwelch\n',
-        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  }\n}\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  },\n  "persistent": {\n    "test": false\n  }\n}\n',
     ),
     (
         ['-v'],
         'Hello lordwelch\nmerged_namespace.values.example_verbose=True\n',
-        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  }\n}\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  },\n  "persistent": {\n    "test": false\n  }\n}\n',
     ),
     (
         ['-v', '-s'],
         'Hello lordwelch\nSuccessfully saved settings to settings.json\nmerged_namespace.values.example_verbose=True\n',
-        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  }\n}\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false\n  }\n}\n',
     ),
     (
         [],
         'Hello lordwelch\nmerged_namespace.values.example_verbose=True\n',
-        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  }\n}\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false\n  }\n}\n',
     ),
     (
-        ['--no-verbose'],
+        ['manual settings.json'],
+        'Hello lordwelch\nmerged_namespace.values.example_verbose=True\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false,\n    "hello": "world"\n  }\n}\n',
+    ),
+    (
+        ['--no-verbose', '-t'],
         'Hello lordwelch\n',
-        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  }\n}\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false,\n    "hello": "world"\n  }\n}\n',
     ),
     (
-        ['--no-verbose', '-s'],
+        ['--no-verbose', '-s', '-t'],
         'Hello lordwelch\nSuccessfully saved settings to settings.json\n',
-        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  }\n}\n',
+        '{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": false\n  },\n  "persistent": {\n    "test": true,\n    "hello": "world"\n  }\n}\n',
     ),
     (
-        ['--hello', 'world', '--no-verbose', '-s'],
+        ['--hello', 'world', '--no-verbose', '--no-test', '-s'],
         'Hello world\nSuccessfully saved settings to settings.json\n',
-        '{\n  "example": {\n    "hello": "world",\n    "verbose": false\n  }\n}\n',
+        '{\n  "example": {\n    "hello": "world",\n    "verbose": false\n  },\n  "persistent": {\n    "test": false,\n    "hello": "world"\n  }\n}\n',
     ),
     (
         [],
         'Hello world\n',
-        '{\n  "example": {\n    "hello": "world",\n    "verbose": false\n  }\n}\n',
+        '{\n  "example": {\n    "hello": "world",\n    "verbose": false\n  },\n  "persistent": {\n    "test": false,\n    "hello": "world"\n  }\n}\n',
     ),
 ]
 success = [

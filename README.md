@@ -16,7 +16,7 @@ pip install settngs
 ```
 
 
-A trivial example is included at the bottom of settngs.py with the output below. For a more complete example see [ComicTagger].
+A trivial example is included at the bottom of settngs.py with the output below (using bash). For a more complete example see [ComicTagger].
 ```console
 $ python -m settngs
 Hello world
@@ -37,6 +37,18 @@ merged_namespace.values.example_verbose=True
 $ python -m settngs
 Hello lordwelch
 merged_namespace.values.example_verbose=True
+$ cat >settings.json << EOF
+{
+  "example": {
+    "hello": "lordwelch",
+    "verbose": true
+  },
+  "persistent": {
+    "test": false,
+    "hello": "world"
+  }
+}
+EOF
 $ python -m settngs --no-verbose
 Hello lordwelch
 $ python -m settngs --no-verbose -s
@@ -55,7 +67,9 @@ settngs.json at the end:
   "example": {
     "hello": "world",
     "verbose": false
-  }
+  },
+  "persistent": false,
+  "hello": "world"
 }
 ```
 

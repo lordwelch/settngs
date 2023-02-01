@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import pathlib
+import re
 import sys
 from argparse import Namespace
 from collections import defaultdict
@@ -24,7 +25,14 @@ if sys.version_info < (3, 11):  # pragma: no cover
 else:  # pragma: no cover
     from typing import NamedTuple
 
+
 if sys.version_info < (3, 9):  # pragma: no cover
+    def removeprefix(self: str, prefix: str, /) -> str:
+        if self.startswith(prefix):
+            return self[len(prefix):]
+        else:
+            return self[:]
+
     class BooleanOptionalAction(argparse.Action):
         def __init__(
             self,
@@ -66,6 +74,7 @@ if sys.version_info < (3, 9):  # pragma: no cover
                 setattr(namespace, self.dest, not option_string.startswith('--no-'))
 else:  # pragma: no cover
     from argparse import BooleanOptionalAction
+    removeprefix = str.removeprefix
 
 
 class Setting:
@@ -148,7 +157,7 @@ class Setting:
         for n in names:
             if n.startswith('--'):
                 flag = True
-                dest_name = n.lstrip('-').replace('-', '_')
+                dest_name = sanitize_name(n)
                 break
             if n.startswith('-'):
                 flag = True
@@ -157,6 +166,8 @@ class Setting:
             dest_name = names[0]
         if dest:
             dest_name = dest
+        if not dest_name.isidentifier():
+            raise Exception('Cannot use {dest_name} in a namespace')
 
         internal_name = f'{prefix}_{dest_name}'.lstrip('_')
         return internal_name, dest_name, flag
@@ -168,8 +179,13 @@ class Setting:
         return self.argparse_args, self.filter_argparse_kwargs()
 
 
+class Group(NamedTuple):
+    persistent: bool
+    v: dict[str, Setting]
+
+
 Values = Dict[str, Dict[str, Any]]
-Definitions = Dict[str, Dict[str, Setting]]
+Definitions = Dict[str, Group]
 
 T = TypeVar('T', Values, Namespace)
 
@@ -182,6 +198,10 @@ class Config(NamedTuple, Generic[T]):
 if TYPE_CHECKING:
     ArgParser = Union[argparse._MutuallyExclusiveGroup, argparse._ArgumentGroup, argparse.ArgumentParser]
     ns = Namespace | Config[T] | None
+
+
+def sanitize_name(name: str) -> str:
+    return re.sub('[' + re.escape(' -_,.!@#$%^&*(){}[]\',."<>;:') + ']+', '-', name).strip('-')
 
 
 def get_option(options: Values | Namespace, setting: Setting) -> tuple[Any, bool]:
@@ -199,11 +219,36 @@ def get_option(options: Values | Namespace, setting: Setting) -> tuple[Any, bool
     return value, value == setting.default
 
 
+def get_options(options: Config[T], group: str) -> dict[str, Any]:
+    """
+    Helper function to retrieve all of the values for a group. Only to be used on persistent groups.
+
+    Args:
+        options: Dictionary or namespace of options
+        group: The name of the group to retrieve
+    """
+    if isinstance(options[0], dict):
+        values = options[0].get(group, {}).copy()
+    else:
+        internal_names = {x.internal_name: x for x in options[1][group].v.values()}
+        values = {}
+        v = vars(options[0])
+        for name, value in v.items():
+            if name.startswith(f'{group}_'):
+                if name in internal_names:
+                    values[internal_names[name].dest] = value
+                else:
+                    values[removeprefix(name, f'{group}_')] = value
+
+    return values
+
+
 def normalize_config(
     config: Config[T],
     file: bool = False,
     cmdline: bool = False,
     defaults: bool = True,
+    persistent: bool = True,
 ) -> Config[Values]:
     """
     Creates an `OptionValues` dictionary with setting definitions taken from `self.definitions`
@@ -216,19 +261,23 @@ def normalize_config(
         file: Include file options
         cmdline: Include cmdline options
         defaults: Include default values in the returned dict
-        raw_options_2: If set, merges non-default values into the returned dict
+        persistent: Include unknown keys in persistent groups
     """
 
     normalized: Values = {}
     options, definitions = config
     for group_name, group in definitions.items():
         group_options = {}
-        for setting_name, setting in group.items():
+        if group.persistent and persistent:
+            group_options = get_options(config, group_name)
+        for setting_name, setting in group.v.items():
             if (setting.cmdline and cmdline) or (setting.file and file):
                 # Ensures the option exists with the default if not already set
                 value, default = get_option(options, setting)
                 if not default or default and defaults:
                     group_options[setting_name] = value
+                elif setting_name in group_options:
+                    del group_options[setting_name]
         normalized[group_name] = group_options
     return Config(normalized, definitions)
 
@@ -261,7 +310,7 @@ def clean_config(
     config: Config[T], file: bool = False, cmdline: bool = False,
 ) -> Values:
     """
-    Normalizes options and then cleans up empty groups and removes 'definitions'
+    Normalizes options and then cleans up empty groups
     Args:
         options:
         file:
@@ -282,7 +331,7 @@ def defaults(definitions: Definitions) -> Config[Values]:
     return normalize_config(Config(Namespace(), definitions), file=True, cmdline=True)
 
 
-def get_namespace(config: Config[T], defaults: bool = True) -> Config[Namespace]:
+def get_namespace(config: Config[T], defaults: bool = True, persistent: bool = True) -> Config[Namespace]:
     """
     Returns an Namespace object with options in the form "{group_name}_{setting_name}"
     `options` should already be normalized.
@@ -291,6 +340,7 @@ def get_namespace(config: Config[T], defaults: bool = True) -> Config[Namespace]
     Args:
         options: Normalized options to turn into a Namespace
         defaults: Include default values in the returned dict
+        persistent: Include unknown keys in persistent groups
     """
 
     if isinstance(config.values, Namespace):
@@ -299,13 +349,28 @@ def get_namespace(config: Config[T], defaults: bool = True) -> Config[Namespace]
         options, definitions = config
     namespace = Namespace()
     for group_name, group in definitions.items():
-        for setting_name, setting in group.items():
-            if hasattr(namespace, setting.internal_name):
-                raise Exception(f'Duplicate internal name: {setting.internal_name}')
-            value, default = get_option(options, setting)
+        if group.persistent and persistent:
+            group_options = get_options(config, group_name)
+            for name, value in group_options.items():
+                if name in group.v:
+                    internal_name, default = group.v[name].internal_name, group.v[name].default == value
+                else:
+                    internal_name, default = f'{group_name}_' + sanitize_name(name), None
 
-            if not default or default and defaults:
-                setattr(namespace, setting.internal_name, value)
+                if hasattr(namespace, internal_name):
+                    raise Exception(f'Duplicate internal name: {internal_name}')
+
+                if not default or default and defaults:
+                    setattr(namespace, internal_name, value)
+
+        else:
+            for setting_name, setting in group.v.items():
+                if hasattr(namespace, setting.internal_name):
+                    raise Exception(f'Duplicate internal name: {setting.internal_name}')
+                value, default = get_option(options, setting)
+
+                if not default or default and defaults:
+                    setattr(namespace, setting.internal_name, value)
     return Config(namespace, definitions)
 
 
@@ -339,7 +404,7 @@ def create_argparser(definitions: Definitions, description: str, epilog: str) ->
         description=description, epilog=epilog, formatter_class=argparse.RawTextHelpFormatter,
     )
     for group_name, group in definitions.items():
-        for setting_name, setting in group.items():
+        for setting_name, setting in group.v.items():
             if setting.cmdline:
                 argparse_args, argparse_kwargs = setting.to_argparse()
                 current_group: ArgParser = argparser
@@ -416,7 +481,7 @@ class Manager:
         if isinstance(definitions, Config):
             self.definitions = definitions.definitions
         else:
-            self.definitions = defaultdict(lambda: dict(), definitions or {})
+            self.definitions = defaultdict(lambda: Group(False, {}), definitions or {})
 
         self.exclusive_group = False
         self.current_group_name = ''
@@ -427,20 +492,36 @@ class Manager:
     def add_setting(self, *args: Any, **kwargs: Any) -> None:
         """Takes passes all arguments through to `Setting`, `group` and `exclusive` are already set"""
         setting = Setting(*args, **kwargs, group=self.current_group_name, exclusive=self.exclusive_group)
-        self.definitions[self.current_group_name][setting.dest] = setting
+        self.definitions[self.current_group_name].v[setting.dest] = setting
 
-    def add_group(self, name: str, add_settings: Callable[[Manager], None], exclusive_group: bool = False) -> None:
+    def add_group(self, name: str, group: Callable[[Manager], None], exclusive_group: bool = False) -> None:
         """
         The primary way to add define options on this class
 
         Args:
             name: The name of the group to define
-            add_settings: A function that registers individual options using :meth:`add_setting`
+            group: A function that registers individual options using :meth:`add_setting`
             exclusive_group: If this group is an argparse exclusive group
         """
         self.current_group_name = name
         self.exclusive_group = exclusive_group
-        add_settings(self)
+        group(self)
+        self.current_group_name = ''
+        self.exclusive_group = False
+
+    def add_persistent_group(self, name: str, group: Callable[[Manager], None], exclusive_group: bool = False) -> None:
+        """
+        The primary way to add define options on this class
+
+        Args:
+            name: The name of the group to define
+            group: A function that registers individual options using :meth:`add_setting`
+            exclusive_group: If this group is an argparse exclusive group
+        """
+        self.current_group_name = name
+        self.exclusive_group = exclusive_group
+        self.definitions[self.current_group_name] = Group(True, {})
+        group(self)
         self.current_group_name = ''
         self.exclusive_group = False
 
@@ -527,11 +608,20 @@ def example(manager: Manager) -> None:
     )
 
 
+def persistent(manager: Manager) -> None:
+    manager.add_setting(
+        '--test', '-t',
+        default=False,
+        action=BooleanOptionalAction,  # Added in Python 3.9
+    )
+
+
 def _main(args: list[str] | None = None) -> None:
     settings_path = pathlib.Path('./settings.json')
     manager = Manager(description='This is an example', epilog='goodbye!')
 
     manager.add_group('example', example)
+    manager.add_persistent_group('persistent', persistent)
 
     file_config, success = manager.parse_file(settings_path)
     file_namespace = manager.get_namespace(file_config)

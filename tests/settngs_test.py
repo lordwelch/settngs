@@ -6,6 +6,7 @@ import json
 import pytest
 
 import settngs
+from settngs import Group
 from testing.settngs import example
 from testing.settngs import failure
 from testing.settngs import success
@@ -27,7 +28,7 @@ def test_settngs_manager_config():
     manager = settngs.Manager(
         definitions=settngs.Config[settngs.Namespace](
             settngs.Namespace(),
-            {'tst': {'test': settngs.Setting('--test', default='hello', group='tst', exclusive=False)}},
+            {'tst': Group(False, {'test': settngs.Setting('--test', default='hello', group='tst', exclusive=False)})},
         ),
     )
 
@@ -97,12 +98,15 @@ def test_cmdline_only(settngs_manager):
 
 def test_normalize(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
+    settngs_manager.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
 
     defaults = settngs_manager.defaults()
-    defaults.values['test'] = 'fail'  # Not defined in settngs_manager
+    defaults.values['test'] = 'fail'  # Not defined in settngs_manager, should be removed
+    defaults.values['persistent']['hello'] = 'success'  # Not defined in settngs_manager, should stay
 
     defaults_namespace = settngs_manager.get_namespace(settngs_manager.defaults())
-    defaults_namespace.values.test = 'fail'
+    defaults_namespace.values.test = 'fail'  # Not defined in settngs_manager, should be removed
+    defaults_namespace.values.persistent_hello = 'success'  # Not defined in settngs_manager, should stay
 
     normalized, _ = settngs_manager.normalize_config(defaults, file=True)
     normalized_from_namespace = settngs_manager.normalize_config(defaults_namespace, file=True)
@@ -112,17 +116,21 @@ def test_normalize(settngs_manager):
     assert 'tst' in normalized
     assert 'test' in normalized['tst']
     assert normalized['tst']['test'] == 'hello'
+    assert normalized['persistent']['hello'] == 'success'
 
     assert not hasattr(normalized_namespace, 'test')
     assert hasattr(normalized_namespace, 'tst_test')
     assert normalized_namespace.tst_test == 'hello'
+    assert normalized_namespace.persistent_hello == 'success'
 
 
 def test_clean_config(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=False))
     settngs_manager.add_group('tst2', lambda parser: parser.add_setting('--test2', default='hello', file=False))
+    settngs_manager.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
     normalized, _ = settngs_manager.defaults()
     normalized['tst']['test'] = 'success'
+    normalized['persistent']['hello'] = 'success'
     normalized['fail'] = 'fail'
 
     cleaned = settngs_manager.clean_config(normalized, file=True)
@@ -130,6 +138,7 @@ def test_clean_config(settngs_manager):
     assert 'fail' not in cleaned
     assert 'tst2' not in cleaned
     assert cleaned['tst']['test'] == 'success'
+    assert cleaned['persistent']['hello'] == 'success'
 
 
 def test_parse_cmdline(settngs_manager, tmp_path):
@@ -154,14 +163,16 @@ def test_parse_cmdline_with_namespace(settngs_manager, tmp_path):
 
 def test_parse_file(settngs_manager, tmp_path):
     settngs_file = tmp_path / 'settngs.json'
-    settngs_file.write_text(json.dumps({'tst': {'test': 'success'}}))
+    settngs_file.write_text(json.dumps({'tst': {'test': 'success'}, 'persistent': {'hello': 'success'}}))
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=False))
+    settngs_manager.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
 
     normalized, success = settngs_manager.parse_file(settngs_file)
 
     assert success
     assert 'test' in normalized[0]['tst']
     assert normalized[0]['tst']['test'] == 'success'
+    assert normalized[0]['persistent']['hello'] == 'success'
 
 
 def test_parse_non_existent_file(settngs_manager, tmp_path):
@@ -190,15 +201,18 @@ def test_parse_corrupt_file(settngs_manager, tmp_path):
 def test_save_file(settngs_manager, tmp_path):
     settngs_file = tmp_path / 'settngs.json'
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=False))
+    settngs_manager.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
     normalized, _ = settngs_manager.defaults()
     normalized['tst']['test'] = 'success'
+    normalized['persistent']['hello'] = 'success'
 
     success = settngs_manager.save_file(normalized, settngs_file)
-    normalized, success_r = settngs_manager.parse_file(settngs_file)
+    normalized_r, success_r = settngs_manager.parse_file(settngs_file)
 
     assert success and success_r
-    assert 'test' in normalized[0]['tst']
-    assert normalized[0]['tst']['test'] == 'success'
+    assert 'test' in normalized_r[0]['tst']
+    assert normalized_r[0]['tst']['test'] == 'success'
+    assert normalized_r[0]['persistent']['hello'] == 'success'
 
 
 def test_save_file_not_seriazable(settngs_manager, tmp_path):
@@ -208,11 +222,16 @@ def test_save_file_not_seriazable(settngs_manager, tmp_path):
     normalized['tst']['test'] = {'fail'}  # Sets are not serializabl
 
     success = settngs_manager.save_file(normalized, settngs_file)
-    normalized, success_r = settngs_manager.parse_file(settngs_file)
+    normalized_r, success_r = settngs_manager.parse_file(settngs_file)
+    # normalized_r will be the default settings
 
-    assert not (success and success_r)
-    assert 'test' in normalized[0]['tst']
-    assert normalized[0]['tst']['test'] == 'hello'
+    assert not success
+    assert not success_r
+    assert 'test' in normalized['tst']
+    assert normalized['tst']['test'] == {'fail'}
+
+    assert 'test' in normalized_r[0]['tst']
+    assert normalized_r[0]['tst']['test'] == 'hello'
 
 
 def test_cli_set(settngs_manager, tmp_path):
@@ -272,8 +291,14 @@ def test_example(capsys, tmp_path, monkeypatch):
     settings_file = tmp_path / 'settings.json'
     settings_file.touch()
 
+    i = 0
     for args, expected_out, expected_file in example:
-        settngs._main(args)
-        captured = capsys.readouterr()
-        assert captured.out == expected_out, args
-        assert settings_file.read_text() == expected_file, args
+        if args == ['manual settings.json']:
+            settings_file.unlink()
+            settings_file.write_text('{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false,\n    "hello": "world"\n  }\n}\n')
+        else:
+            settngs._main(args)
+            captured = capsys.readouterr()
+        assert captured.out == expected_out, f'{i}, {args}'
+        assert settings_file.read_text() == expected_file, f'{i}, {args}'
+        i += 1
