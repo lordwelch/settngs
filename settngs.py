@@ -201,7 +201,7 @@ if TYPE_CHECKING:
 
 
 def sanitize_name(name: str) -> str:
-    return re.sub('[' + re.escape(' -_,.!@#$%^&*(){}[]\',."<>;:') + ']+', '-', name).strip('-')
+    return re.sub('[' + re.escape(' -_,.!@#$%^&*(){}[]\',."<>;:') + ']+', '_', name).strip('_')
 
 
 def get_option(options: Values | Namespace, setting: Setting) -> tuple[Any, bool]:

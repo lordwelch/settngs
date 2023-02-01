@@ -66,12 +66,50 @@ example: list[tuple[list[str], str, str]] = [
 success = [
     (
         (
+            ('--test-setting',),
+            dict(
+                group='tst',
+            ),
+        ),  # Equivalent to Setting("--test-setting", group="tst")
+        {
+            'action': None,
+            'choices': None,
+            'cmdline': True,
+            'const': None,
+            'default': None,
+            'dest': 'test_setting',  # dest is calculated by Setting and is not used by argparse
+            'exclusive': False,
+            'file': True,
+            'group': 'tst',
+            'help': None,
+            'internal_name': 'tst_test_setting',  # Should almost always be "{group}_{dest}"
+            'metavar': 'TEST_SETTING',  # Set manually so argparse doesn't use TST_TEST
+            'nargs': None,
+            'required': None,
+            'type': None,
+            'argparse_args': ('--test-setting',),  # *args actually sent to argparse
+            'argparse_kwargs': {
+                'action': None,
+                'choices': None,
+                'const': None,
+                'default': None,
+                'dest': 'tst_test_setting',
+                'help': None,
+                'metavar': 'TEST_SETTING',
+                'nargs': None,
+                'required': None,
+                'type': None,
+            },  # Non-None **kwargs sent to argparse
+        },
+    ),
+    (
+        (
             ('--test',),
             dict(
                 group='tst',
                 dest='testing',
             ),
-        ),  # Equivalent to Setting("--test", group="tst")
+        ),  # Equivalent to Setting("--test", group="tst", dest="testing")
         {
             'action': None,
             'choices': None,
