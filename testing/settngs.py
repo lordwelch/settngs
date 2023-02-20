@@ -78,6 +78,7 @@ success = [
             'const': None,
             'default': None,
             'dest': 'test_setting',  # dest is calculated by Setting and is not used by argparse
+            'display_name': 'test_setting',  # defaults to dest
             'exclusive': False,
             'file': True,
             'group': 'tst',
@@ -117,6 +118,7 @@ success = [
             'const': None,
             'default': None,
             'dest': 'testing',  # dest is calculated by Setting and is not used by argparse
+            'display_name': 'testing',  # defaults to dest
             'exclusive': False,
             'file': True,
             'group': 'tst',
@@ -155,6 +157,7 @@ success = [
             'const': None,
             'default': None,
             'dest': 'test',  # dest is calculated by Setting and is not used by argparse
+            'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
             'group': 'tst',
@@ -194,6 +197,7 @@ success = [
             'const': None,
             'default': None,
             'dest': 'test',  # dest is calculated by Setting and is not used by argparse
+            'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
             'group': 'tst',
@@ -232,6 +236,7 @@ success = [
             'const': None,
             'default': None,
             'dest': 'test',
+            'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
             'group': 'tst',
@@ -270,6 +275,7 @@ success = [
             'const': None,
             'default': None,
             'dest': 'test',
+            'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
             'group': 'tst',
@@ -306,6 +312,7 @@ success = [
             'const': None,
             'default': None,
             'dest': 'test',
+            'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
             'group': '',

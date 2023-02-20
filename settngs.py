@@ -93,11 +93,35 @@ class Setting:
         metavar: str | None = None,
         dest: str | None = None,
         # ComicTagger
+        display_name: str = '',
         cmdline: bool = True,
         file: bool = True,
         group: str = '',
         exclusive: bool = False,
     ):
+        """
+
+        Args:
+            *names:       Passed directly to argparse
+            action:       Passed directly to argparse
+            nargs:        Passed directly to argparse
+            const:        Passed directly to argparse
+            default:      Passed directly to argparse
+            type:         Passed directly to argparse
+            choices:      Passed directly to argparse
+            required:     Passed directly to argparse
+            help:         Passed directly to argparse
+            metavar:      Passed directly to argparse, defaults to `dest` uppercased
+            dest:         This is the name used to retrieve the value from a `Config` object as a dictionary
+            display_name: This is not used by settngs. This is a human-readable name to be used when generating a GUI.
+                          Defaults to `dest`.
+            cmdline:      If this setting can be set via the commandline
+            file:         If this setting can be set via a file
+            group:        The group this option is in.
+                          This is an internal argument and should only be set by settngs
+            exclusive:    If this setting is exclusive to other settings in this group.
+                          This is an internal argument and should only be set by settngs
+        """
         if not names:
             raise ValueError('names must be specified')
         # We prefix the destination name used by argparse so that there are no conflicts
@@ -130,6 +154,7 @@ class Setting:
         self.argparse_args = args
         self.group = group
         self.exclusive = exclusive
+        self.display_name = display_name or dest
 
         self.argparse_kwargs = {
             'action': action,
