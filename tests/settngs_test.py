@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import defaultdict
 
 import pytest
 
@@ -141,7 +142,7 @@ def test_clean_config(settngs_manager):
     assert cleaned['persistent']['hello'] == 'success'
 
 
-def test_parse_cmdline(settngs_manager, tmp_path):
+def test_parse_cmdline(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=True))
 
     normalized, _ = settngs_manager.parse_cmdline(['--test', 'success'])
@@ -150,7 +151,7 @@ def test_parse_cmdline(settngs_manager, tmp_path):
     assert normalized['tst']['test'] == 'success'
 
 
-def test_parse_cmdline_with_namespace(settngs_manager, tmp_path):
+def test_parse_cmdline_with_namespace(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', cmdline=True))
 
     normalized, _ = settngs_manager.parse_cmdline(
@@ -284,6 +285,42 @@ def test_cli_explicit_default(settngs_manager, tmp_path):
     assert success
     assert 'test' in normalized['tst']
     assert normalized['tst']['test'] == 'success'
+
+
+def test_adding_to_existing_group(settngs_manager, tmp_path):
+    def default_to_regular(d):
+        if isinstance(d, defaultdict):
+            d = {k: default_to_regular(v) for k, v in d.items()}
+        return d
+    settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='success'))
+    settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test2', default='success'))
+
+    def tst(parser):
+        parser.add_setting('--test', default='success')
+        parser.add_setting('--test2', default='success')
+
+    settngs_manager2 = settngs.Manager()
+    settngs_manager2.add_group('tst', tst)
+
+    assert default_to_regular(settngs_manager.definitions) == default_to_regular(settngs_manager2.definitions)
+
+
+def test_adding_to_existing_persistent_group(settngs_manager, tmp_path):
+    def default_to_regular(d):
+        if isinstance(d, defaultdict):
+            d = {k: default_to_regular(v) for k, v in d.items()}
+        return d
+    settngs_manager.add_persistent_group('tst', lambda parser: parser.add_setting('--test', default='success'))
+    settngs_manager.add_persistent_group('tst', lambda parser: parser.add_setting('--test2', default='success'))
+
+    def tst(parser):
+        parser.add_setting('--test', default='success')
+        parser.add_setting('--test2', default='success')
+
+    settngs_manager2 = settngs.Manager()
+    settngs_manager2.add_persistent_group('tst', tst)
+
+    assert default_to_regular(settngs_manager.definitions) == default_to_regular(settngs_manager2.definitions)
 
 
 def test_example(capsys, tmp_path, monkeypatch):

@@ -150,6 +150,11 @@ class Setting:
     def __repr__(self) -> str:  # pragma: no cover
         return self.__str__()
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Setting):
+            return NotImplemented
+        return self.__dict__ == other.__dict__
+
     def get_dest(self, prefix: str, names: Sequence[str], dest: str | None) -> tuple[str, str, bool]:
         dest_name = None
         flag = False
@@ -496,13 +501,15 @@ class Manager:
 
     def add_group(self, name: str, group: Callable[[Manager], None], exclusive_group: bool = False) -> None:
         """
-        The primary way to add define options on this class
+        The primary way to add define options on this class.
 
         Args:
             name: The name of the group to define
             group: A function that registers individual options using :meth:`add_setting`
             exclusive_group: If this group is an argparse exclusive group
         """
+        if self.current_group_name != '':
+            raise ValueError('Sub groups are not allowed')
         self.current_group_name = name
         self.exclusive_group = exclusive_group
         group(self)
@@ -511,16 +518,23 @@ class Manager:
 
     def add_persistent_group(self, name: str, group: Callable[[Manager], None], exclusive_group: bool = False) -> None:
         """
-        The primary way to add define options on this class
+        The primary way to add define options on this class.
+        This group allows existing values to persist even if there is no corresponding setting defined for it.
 
         Args:
             name: The name of the group to define
             group: A function that registers individual options using :meth:`add_setting`
             exclusive_group: If this group is an argparse exclusive group
         """
+        if self.current_group_name != '':
+            raise ValueError('Sub groups are not allowed')
         self.current_group_name = name
         self.exclusive_group = exclusive_group
-        self.definitions[self.current_group_name] = Group(True, {})
+        if self.current_group_name in self.definitions:
+            if not self.definitions[self.current_group_name].persistent:
+                raise ValueError('Group already existis and is not persistent')
+        else:
+            self.definitions[self.current_group_name] = Group(True, {})
         group(self)
         self.current_group_name = ''
         self.exclusive_group = False
