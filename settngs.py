@@ -379,7 +379,7 @@ def get_namespace(config: Config[T], defaults: bool = True, persistent: bool = T
     """
 
     if isinstance(config.values, Namespace):
-        options, definitions = normalize_config(config, defaults=defaults, persistent=persistent)
+        options, definitions = normalize_config(config, True, True, defaults=defaults, persistent=persistent)
     else:
         options, definitions = config
     namespace = Namespace()
