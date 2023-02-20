@@ -197,7 +197,7 @@ class Setting:
         if dest:
             dest_name = dest
         if not dest_name.isidentifier():
-            raise Exception('Cannot use {dest_name} in a namespace')
+            raise Exception(f'Cannot use {dest_name} in a namespace')
 
         internal_name = f'{prefix}_{dest_name}'.lstrip('_')
         return internal_name, dest_name, flag
@@ -304,10 +304,15 @@ def normalize_config(
             if (setting.cmdline and cmdline) or (setting.file and file):
                 # Ensures the option exists with the default if not already set
                 value, default = get_option(options, setting)
-                if not default or default and defaults:
+                if not default or (default and defaults):
+                    # User has set a custom value or has requested the default value
                     group_options[setting_name] = value
                 elif setting_name in group_options:
+                    # defaults have been requested to be removed
                     del group_options[setting_name]
+            elif setting_name in group_options:
+                # Setting type (file or cmdline) has not been requested and should be removed for persistent groups
+                del group_options[setting_name]
         normalized[group_name] = group_options
     return Config(normalized, definitions)
 
@@ -374,7 +379,7 @@ def get_namespace(config: Config[T], defaults: bool = True, persistent: bool = T
     """
 
     if isinstance(config.values, Namespace):
-        options, definitions = normalize_config(config)
+        options, definitions = normalize_config(config, defaults=defaults, persistent=persistent)
     else:
         options, definitions = config
     namespace = Namespace()
@@ -459,7 +464,7 @@ def parse_cmdline(
     description: str,
     epilog: str,
     args: list[str] | None = None,
-    config: Namespace | Config[T] | None = None,
+    config: ns[T] = None,
 ) -> Config[Values]:
     """
     Creates an `argparse.ArgumentParser` from cmdline settings in `self.definitions`.
