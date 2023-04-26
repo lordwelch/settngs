@@ -33,7 +33,7 @@ jobs:
 
       - name: Build and install wheel
         run: |
-          python -m build
+          tox run -m build
           python -m pip install dist/*.whl
 
       - name: tox
