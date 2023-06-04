@@ -294,6 +294,9 @@ def normalize_config(
         persistent: Include unknown keys in persistent groups
     """
 
+    if not file and not cmdline:
+        raise ValueError('Invalid parameters: you must set either file or cmdline to True')
+
     normalized: Values = {}
     options, definitions = config
     for group_name, group in definitions.items():
@@ -366,7 +369,9 @@ def defaults(definitions: Definitions) -> Config[Values]:
     return normalize_config(Config(Namespace(), definitions), file=True, cmdline=True)
 
 
-def get_namespace(config: Config[T], defaults: bool = True, persistent: bool = True) -> Config[Namespace]:
+def get_namespace(
+    config: Config[T], file: bool = False, cmdline: bool = False, defaults: bool = True, persistent: bool = True,
+) -> Config[Namespace]:
     """
     Returns an Namespace object with options in the form "{group_name}_{setting_name}"
     `options` should already be normalized.
@@ -378,33 +383,36 @@ def get_namespace(config: Config[T], defaults: bool = True, persistent: bool = T
         persistent: Include unknown keys in persistent groups
     """
 
+    if not file and not cmdline:
+        raise ValueError('Invalid parameters: you must set either file or cmdline to True')
+
     if isinstance(config.values, Namespace):
-        options, definitions = normalize_config(config, True, True, defaults=defaults, persistent=persistent)
+        options, definitions = normalize_config(config, file, cmdline, defaults=defaults, persistent=persistent)
     else:
         options, definitions = config
     namespace = Namespace()
     for group_name, group in definitions.items():
+
+        group_options = get_options(config, group_name)
         if group.persistent and persistent:
-            group_options = get_options(config, group_name)
             for name, value in group_options.items():
                 if name in group.v:
-                    internal_name, default = group.v[name].internal_name, group.v[name].default == value
+                    setting_file, setting_cmdline = group.v[name].file, group.v[name].cmdline
+                    value, default = get_option(options, group.v[name])
+                    internal_name = group.v[name].internal_name
                 else:
+                    setting_file = setting_cmdline = True
                     internal_name, default = f'{group_name}_' + sanitize_name(name), None
 
-                if hasattr(namespace, internal_name):
-                    raise Exception(f'Duplicate internal name: {internal_name}')
-
-                if not default or default and defaults:
+                if ((setting_cmdline and cmdline) or (setting_file and file)) and (not default or (default and defaults)):
                     setattr(namespace, internal_name, value)
 
-        else:
-            for setting_name, setting in group.v.items():
-                if hasattr(namespace, setting.internal_name):
-                    raise Exception(f'Duplicate internal name: {setting.internal_name}')
+        for setting_name, setting in group.v.items():
+            if (setting.cmdline and cmdline) or (setting.file and file):
                 value, default = get_option(options, setting)
 
-                if not default or default and defaults:
+                if not default or (default and defaults):
+                    # User has set a custom value or has requested the default value
                     setattr(namespace, setting.internal_name, value)
     return Config(namespace, definitions)
 
@@ -479,7 +487,7 @@ def parse_cmdline(
         if isinstance(config.values, Namespace):
             namespace = config.values
         else:
-            namespace = get_namespace(config, defaults=False)[0]
+            namespace = get_namespace(config, file=True, cmdline=True, defaults=False)[0]
     else:
         namespace = config
     argparser = create_argparser(definitions, description, epilog)
@@ -497,7 +505,7 @@ def parse_config(
 ) -> tuple[Config[Values], bool]:
     file_options, success = parse_file(definitions, config_path)
     cmdline_options = parse_cmdline(
-        definitions, description, epilog, args, get_namespace(file_options, defaults=False),
+        definitions, description, epilog, args, get_namespace(file_options, file=True, cmdline=True, defaults=False),
     )
 
     final_options = normalize_config(cmdline_options, file=True, cmdline=True)
@@ -605,19 +613,41 @@ class Manager:
         )
 
     @overload
-    def get_namespace(self, options: Values, defaults: bool = True) -> Namespace:
+    def get_namespace(
+        self,
+        options: Values,
+        file: bool = False,
+        cmdline: bool = False,
+        defaults: bool = True,
+        persistent: bool = True,
+    ) -> Namespace:
         ...
 
     @overload
-    def get_namespace(self, options: Config[Values], defaults: bool = True) -> Config[Namespace]:
+    def get_namespace(
+        self,
+        options: Config[Values],
+        file: bool = False,
+        cmdline: bool = False,
+        defaults: bool = True,
+        persistent: bool = True,
+    ) -> Config[Namespace]:
         ...
 
-    def get_namespace(self, options: Values | Config[Values], defaults: bool = True) -> Config[Namespace] | Namespace:
+    def get_namespace(
+        self,
+        options: Values | Config[Values],
+        file: bool = False,
+        cmdline: bool = False,
+        defaults: bool = True,
+        persistent: bool = True,
+    ) -> Config[Namespace] | Namespace:
         if isinstance(options, Config):
             self.definitions = options[1]
-            return get_namespace(options, defaults=defaults)
+            return get_namespace(options, file=file, cmdline=cmdline, defaults=defaults, persistent=persistent)
         else:
-            return get_namespace(Config(options, self.definitions), defaults=defaults)
+            config = Config(options, self.definitions)
+            return get_namespace(config, file=file, cmdline=cmdline, defaults=defaults, persistent=persistent)
 
     def parse_file(self, filename: pathlib.Path) -> tuple[Config[Values], bool]:
         return parse_file(filename=filename, definitions=self.definitions)
@@ -668,10 +698,10 @@ def _main(args: list[str] | None = None) -> None:
     manager.add_persistent_group('persistent', persistent)
 
     file_config, success = manager.parse_file(settings_path)
-    file_namespace = manager.get_namespace(file_config)
+    file_namespace = manager.get_namespace(file_config, file=True, cmdline=True)
 
     merged_config = manager.parse_cmdline(args=args, namespace=file_namespace)
-    merged_namespace = manager.get_namespace(merged_config)
+    merged_namespace = manager.get_namespace(merged_config, file=True, cmdline=True)
 
     print(f'Hello {merged_config.values["example"]["hello"]}')  # noqa: T201
     if merged_namespace.values.example_save:
