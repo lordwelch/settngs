@@ -57,6 +57,12 @@ def test_add_setting(settngs_manager):
 
 class TestValues:
 
+    def test_invalid_normalize(self, settngs_manager):
+        with pytest.raises(ValueError) as excinfo:
+            settngs_manager.add_setting('--test', default='hello')
+            defaults, _ = settngs_manager.normalize_config({}, file=False, cmdline=False)
+        assert str(excinfo.value) == 'Invalid parameters: you must set either file or cmdline to True'
+
     def test_get_defaults(self, settngs_manager):
         settngs_manager.add_setting('--test', default='hello')
         defaults, _ = settngs_manager.defaults()
@@ -99,14 +105,14 @@ class TestValues:
         settngs_manager.add_persistent_group('tst_persistent', lambda parser: parser.add_setting('--test', default='hello'))
 
         defaults = settngs_manager.defaults()
-        defaults_normalized = settngs_manager.normalize_config(defaults, file=True, defaults=False)
+        defaults_normalized = settngs_manager.normalize_config(defaults, file=True, default=False)
         assert defaults_normalized.values['tst'] == {}
         assert defaults_normalized.values['tst_persistent'] == {}
 
         non_defaults = settngs_manager.defaults()
         non_defaults.values['tst']['test'] = 'world'
         non_defaults.values['tst_persistent']['test'] = 'world'
-        non_defaults_normalized = settngs_manager.normalize_config(non_defaults, file=True, defaults=False)
+        non_defaults_normalized = settngs_manager.normalize_config(non_defaults, file=True, default=False)
 
         assert non_defaults_normalized.values['tst'] == {'test': 'world'}
         assert non_defaults_normalized.values['tst_persistent'] == {'test': 'world'}
@@ -130,6 +136,12 @@ class TestValues:
 
 
 class TestNamespace:
+
+    def test_invalid_normalize(self, settngs_manager):
+        with pytest.raises(ValueError) as excinfo:
+            settngs_manager.add_setting('--test', default='hello')
+            defaults, _ = settngs_manager.get_namespace(settngs_manager.defaults(), file=False, cmdline=False)
+        assert str(excinfo.value) == 'Invalid parameters: you must set either file or cmdline to True'
 
     def test_get_defaults(self, settngs_manager):
         settngs_manager.add_setting('--test', default='hello')
@@ -173,13 +185,13 @@ class TestNamespace:
         settngs_manager.add_persistent_group('tst_persistent', lambda parser: parser.add_setting('--test', default='hello'))
 
         defaults = settngs_manager.defaults()
-        defaults_normalized = settngs_manager.get_namespace(settngs_manager.normalize_config(defaults, file=True, defaults=False), file=True, defaults=False)
+        defaults_normalized = settngs_manager.get_namespace(settngs_manager.normalize_config(defaults, file=True, default=False), file=True, default=False)
         assert defaults_normalized.values.__dict__ == {}
 
         non_defaults = settngs_manager.get_namespace(settngs_manager.defaults(), file=True, cmdline=True)
         non_defaults.values.tst_test = 'world'
         non_defaults.values.tst_persistent_test = 'world'
-        non_defaults_normalized = settngs_manager.get_namespace(settngs_manager.normalize_config(non_defaults, file=True, defaults=False), file=True, defaults=False)
+        non_defaults_normalized = settngs_manager.get_namespace(settngs_manager.normalize_config(non_defaults, file=True, default=False), file=True, default=False)
 
         assert non_defaults_normalized.values.tst_test == 'world'
         assert non_defaults_normalized.values.tst_persistent_test == 'world'
@@ -199,12 +211,6 @@ class TestNamespace:
         assert normalized.tst_test == 'hello'
         assert normalized.persistent_hello == 'success'
         assert normalized.persistent_world == 'world'
-
-
-def test_get_defaults_namespace(settngs_manager):
-    settngs_manager.add_setting('--test', default='hello')
-    defaults, _ = settngs_manager.get_namespace(settngs_manager.defaults(), file=True, cmdline=True)
-    assert defaults.test == 'hello'
 
 
 def test_get_namespace_with_namespace(settngs_manager):
@@ -258,7 +264,7 @@ def test_parse_cmdline_with_namespace(settngs_manager, ns):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test2', default='fail', cmdline=True))
 
     normalized, _ = settngs_manager.parse_cmdline(
-        ['--test', 'success'], namespace=ns(settngs_manager.definitions),
+        ['--test', 'success'], config=ns(settngs_manager.definitions),
     )
 
     assert 'test' in normalized['tst']
@@ -437,6 +443,8 @@ def test_example(capsys, tmp_path, monkeypatch):
         if args == ['manual settings.json']:
             settings_file.unlink()
             settings_file.write_text('{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false,\n    "hello": "world"\n  }\n}\n')
+            i += 1
+            continue
         else:
             settngs._main(args)
             captured = capsys.readouterr()

@@ -14,10 +14,10 @@ from typing import Callable
 from typing import Dict
 from typing import Generic
 from typing import NoReturn
-from typing import overload
 from typing import TYPE_CHECKING
 from typing import TypeVar
 from typing import Union
+
 logger = logging.getLogger(__name__)
 
 if sys.version_info < (3, 11):  # pragma: no cover
@@ -82,10 +82,10 @@ class Setting:
         self,
         # From argparse
         *names: str,
-        action: type[argparse.Action] | None = None,
+        action: type[argparse.Action] | str | None = None,
         nargs: str | int | None = None,
         const: str | None = None,
-        default: str | None = None,
+        default: Any | None = None,
         type: Callable[..., Any] | None = None,  # noqa: A002
         choices: Sequence[Any] | None = None,
         required: bool | None = None,
@@ -111,7 +111,7 @@ class Setting:
             choices:      Passed directly to argparse
             required:     Passed directly to argparse
             help:         Passed directly to argparse
-            metavar:      Passed directly to argparse, defaults to `dest` uppercased
+            metavar:      Passed directly to argparse, defaults to `dest` upper-cased
             dest:         This is the name used to retrieve the value from a `Config` object as a dictionary
             display_name: This is not used by settngs. This is a human-readable name to be used when generating a GUI.
                           Defaults to `dest`.
@@ -236,7 +236,7 @@ def sanitize_name(name: str) -> str:
 
 def get_option(options: Values | Namespace, setting: Setting) -> tuple[Any, bool]:
     """
-    Helper function to retrieve the value for a setting and if the value is the default value
+    Helper function to retrieve the value for a setting and if the current value is the default value
 
     Args:
         options: Dictionary or namespace of options
@@ -249,20 +249,20 @@ def get_option(options: Values | Namespace, setting: Setting) -> tuple[Any, bool
     return value, value == setting.default
 
 
-def get_options(options: Config[T], group: str) -> dict[str, Any]:
+def get_options(config: Config[T], group: str) -> dict[str, Any]:
     """
     Helper function to retrieve all of the values for a group. Only to be used on persistent groups.
 
     Args:
-        options: Dictionary or namespace of options
+        config: Dictionary or namespace of options
         group: The name of the group to retrieve
     """
-    if isinstance(options[0], dict):
-        values = options[0].get(group, {}).copy()
+    if isinstance(config[0], dict):
+        values = config[0].get(group, {}).copy()
     else:
-        internal_names = {x.internal_name: x for x in options[1][group].v.values()}
+        internal_names = {x.internal_name: x for x in config[1][group].v.values()}
         values = {}
-        v = vars(options[0])
+        v = vars(config[0])
         for name, value in v.items():
             if name.startswith(f'{group}_'):
                 if name in internal_names:
@@ -277,7 +277,7 @@ def normalize_config(
     config: Config[T],
     file: bool = False,
     cmdline: bool = False,
-    defaults: bool = True,
+    default: bool = True,
     persistent: bool = True,
 ) -> Config[Values]:
     """
@@ -286,11 +286,10 @@ def normalize_config(
     Values are assigned so if the value is a dictionary mutating it will mutate the original.
 
     Args:
-        raw_options: The dict or Namespace to normalize options from
-        definitions: The definition of the options
+        config: The Config object to normalize options from
         file: Include file options
         cmdline: Include cmdline options
-        defaults: Include default values in the returned dict
+        default: Include default values in the returned Config object
         persistent: Include unknown keys in persistent groups
     """
 
@@ -306,12 +305,12 @@ def normalize_config(
         for setting_name, setting in group.v.items():
             if (setting.cmdline and cmdline) or (setting.file and file):
                 # Ensures the option exists with the default if not already set
-                value, default = get_option(options, setting)
-                if not default or (default and defaults):
+                value, is_default = get_option(options, setting)
+                if not is_default or default:
                     # User has set a custom value or has requested the default value
                     group_options[setting_name] = value
                 elif setting_name in group_options:
-                    # defaults have been requested to be removed
+                    # default values have been requested to be removed
                     del group_options[setting_name]
             elif setting_name in group_options:
                 # Setting type (file or cmdline) has not been requested and should be removed for persistent groups
@@ -322,8 +321,12 @@ def normalize_config(
 
 def parse_file(definitions: Definitions, filename: pathlib.Path) -> tuple[Config[Values], bool]:
     """
-    Helper function to read options from a json dictionary from a file
+    Helper function to read options from a json dictionary from a file.
+    This is purely a convenience function.
+    If _anything_ more advanced is desired this should be handled by the application.
+
     Args:
+        definitions: A set of setting definitions. See `Config.definitions` and `Manager.definitions`
         filename: A pathlib.Path object to read a json dictionary from
     """
     options: Values = {}
@@ -341,28 +344,27 @@ def parse_file(definitions: Definitions, filename: pathlib.Path) -> tuple[Config
         logger.info('No config file found')
         success = True
 
-    return (normalize_config(Config(options, definitions), file=True), success)
+    return normalize_config(Config(options, definitions), file=True), success
 
 
 def clean_config(
-    config: Config[T], file: bool = False, cmdline: bool = False,
+    config: Config[T], file: bool = False, cmdline: bool = False, default: bool = True, persistent: bool = True,
 ) -> Values:
     """
-    Normalizes options and then cleans up empty groups
+    Normalizes options and then cleans up empty groups. The returned value is probably JSON serializable.
     Args:
-        options:
-        file:
-        cmdline:
-
-    Returns:
-
+        config: The Config object to normalize options from
+        file: Include file options
+        cmdline: Include cmdline options
+        default: Include default values in the returned Config object
+        persistent: Include unknown keys in persistent groups
     """
 
-    clean_options, definitions = normalize_config(config, file=file, cmdline=cmdline)
-    for group in list(clean_options.keys()):
-        if not clean_options[group]:
-            del clean_options[group]
-    return clean_options
+    cleaned, _ = normalize_config(config, file=file, cmdline=cmdline, default=default, persistent=persistent)
+    for group in list(cleaned.keys()):
+        if not cleaned[group]:
+            del cleaned[group]
+    return cleaned
 
 
 def defaults(definitions: Definitions) -> Config[Values]:
@@ -370,16 +372,17 @@ def defaults(definitions: Definitions) -> Config[Values]:
 
 
 def get_namespace(
-    config: Config[T], file: bool = False, cmdline: bool = False, defaults: bool = True, persistent: bool = True,
+    config: Config[T], file: bool = False, cmdline: bool = False, default: bool = True, persistent: bool = True,
 ) -> Config[Namespace]:
     """
-    Returns an Namespace object with options in the form "{group_name}_{setting_name}"
-    `options` should already be normalized.
-    Throws an exception if the internal_name is duplicated
+    Returns a Namespace object with options in the form "{group_name}_{setting_name}"
+    `config` should already be normalized or be a `Config[Namespace]`.
 
     Args:
-        options: Normalized options to turn into a Namespace
-        defaults: Include default values in the returned dict
+        config: The Config object to turn into a namespace
+        file: Include file options
+        cmdline: Include cmdline options
+        default: Include default values in the returned Config object
         persistent: Include unknown keys in persistent groups
     """
 
@@ -387,7 +390,8 @@ def get_namespace(
         raise ValueError('Invalid parameters: you must set either file or cmdline to True')
 
     if isinstance(config.values, Namespace):
-        options, definitions = normalize_config(config, file, cmdline, defaults=defaults, persistent=persistent)
+        cfg = normalize_config(config, file=file, cmdline=cmdline, default=default, persistent=persistent)
+        options, definitions = cfg
     else:
         options, definitions = config
     namespace = Namespace()
@@ -398,20 +402,20 @@ def get_namespace(
             for name, value in group_options.items():
                 if name in group.v:
                     setting_file, setting_cmdline = group.v[name].file, group.v[name].cmdline
-                    value, default = get_option(options, group.v[name])
+                    value, is_default = get_option(options, group.v[name])
                     internal_name = group.v[name].internal_name
                 else:
                     setting_file = setting_cmdline = True
-                    internal_name, default = f'{group_name}_' + sanitize_name(name), None
+                    internal_name, is_default = f'{group_name}_' + sanitize_name(name), None
 
-                if ((setting_cmdline and cmdline) or (setting_file and file)) and (not default or (default and defaults)):
+                if ((setting_cmdline and cmdline) or (setting_file and file)) and (not is_default or default):
                     setattr(namespace, internal_name, value)
 
-        for setting_name, setting in group.v.items():
+        for setting in group.v.values():
             if (setting.cmdline and cmdline) or (setting.file and file):
-                value, default = get_option(options, setting)
+                value, is_default = get_option(options, setting)
 
-                if not default or (default and defaults):
+                if not is_default or default:
                     # User has set a custom value or has requested the default value
                     setattr(namespace, setting.internal_name, value)
     return Config(namespace, definitions)
@@ -422,16 +426,19 @@ def save_file(
 ) -> bool:
     """
     Helper function to save options from a json dictionary to a file
+    This is purely a convenience function.
+    If _anything_ more advanced is desired this should be handled by the application.
+
     Args:
-        options: The options to save to a json dictionary
+        config: The options to save to a json dictionary
         filename: A pathlib.Path object to save the json dictionary to
     """
     file_options = clean_config(config, file=True)
-    if not filename.exists():
-        filename.parent.mkdir(exist_ok=True, parents=True)
-        filename.touch()
-
     try:
+        if not filename.exists():
+            filename.parent.mkdir(exist_ok=True, parents=True)
+            filename.touch()
+
         json_str = json.dumps(file_options, indent=2)
         filename.write_text(json_str + '\n', encoding='utf-8')
     except Exception:
@@ -446,8 +453,8 @@ def create_argparser(definitions: Definitions, description: str, epilog: str) ->
     argparser = argparse.ArgumentParser(
         description=description, epilog=epilog, formatter_class=argparse.RawTextHelpFormatter,
     )
-    for group_name, group in definitions.items():
-        for setting_name, setting in group.v.items():
+    for group in definitions.values():
+        for setting in group.v.values():
             if setting.cmdline:
                 argparse_args, argparse_kwargs = setting.to_argparse()
                 current_group: ArgParser = argparser
@@ -479,15 +486,18 @@ def parse_cmdline(
     `args` and `namespace` are passed to `argparse.ArgumentParser.parse_args`
 
     Args:
-        args: Passed to argparse.ArgumentParser.parse
-        namespace: Passed to argparse.ArgumentParser.parse
+        definitions: A set of setting definitions. See `Config.definitions` and `Manager.definitions`
+        description: Passed to argparse.ArgumentParser
+        epilog: Passed to argparse.ArgumentParser
+        args: Passed to argparse.ArgumentParser.parse_args
+        config: The Config or Namespace object to use as a Namespace passed to argparse.ArgumentParser.parse_args
     """
     namespace = None
     if isinstance(config, Config):
         if isinstance(config.values, Namespace):
             namespace = config.values
         else:
-            namespace = get_namespace(config, file=True, cmdline=True, defaults=False)[0]
+            namespace = get_namespace(config, file=True, cmdline=True, default=False)[0]
     else:
         namespace = config
     argparser = create_argparser(definitions, description, epilog)
@@ -503,13 +513,25 @@ def parse_config(
     config_path: pathlib.Path,
     args: list[str] | None = None,
 ) -> tuple[Config[Values], bool]:
+    """
+    Convenience function to parse options from a json file and passes the resulting Config object to parse_cmdline.
+    This is purely a convenience function.
+    If _anything_ more advanced is desired this should be handled by the application.
+
+    Args:
+        definitions: A set of setting definitions. See `Config.definitions` and `Manager.definitions`
+        description: Passed to argparse.ArgumentParser
+        epilog: Passed to argparse.ArgumentParser
+        config_path: A `pathlib.Path` object
+        args: Passed to argparse.ArgumentParser.parse_args
+    """
     file_options, success = parse_file(definitions, config_path)
     cmdline_options = parse_cmdline(
-        definitions, description, epilog, args, get_namespace(file_options, file=True, cmdline=True, defaults=False),
+        definitions, description, epilog, args, file_options,
     )
 
     final_options = normalize_config(cmdline_options, file=True, cmdline=True)
-    return (final_options, success)
+    return final_options, success
 
 
 class Manager:
@@ -533,7 +555,7 @@ class Manager:
         self.argparser = create_argparser(self.definitions, self.description, self.epilog)
 
     def add_setting(self, *args: Any, **kwargs: Any) -> None:
-        """Takes passes all arguments through to `Setting`, `group` and `exclusive` are already set"""
+        """Passes all arguments through to `Setting`, `group` and `exclusive` are already set"""
         setting = Setting(*args, **kwargs, group=self.current_group_name, exclusive=self.exclusive_group)
         self.definitions[self.current_group_name].v[setting.dest] = setting
 
@@ -570,7 +592,7 @@ class Manager:
         self.exclusive_group = exclusive_group
         if self.current_group_name in self.definitions:
             if not self.definitions[self.current_group_name].persistent:
-                raise ValueError('Group already existis and is not persistent')
+                raise ValueError('Group already exists and is not persistent')
         else:
             self.definitions[self.current_group_name] = Group(True, {})
         group(self)
@@ -586,85 +608,151 @@ class Manager:
         return defaults(self.definitions)
 
     def clean_config(
-        self, options: T | Config[T], file: bool = False, cmdline: bool = False,
+        self, config: T | Config[T], file: bool = False, cmdline: bool = False,
     ) -> Values:
-        if isinstance(options, Config):
-            config = options
-        else:
-            config = Config(options, self.definitions)
+        """
+        Normalizes options and then cleans up empty groups. The returned value is probably JSON serializable.
+        Args:
+            config: The Config object to normalize options from
+            file: Include file options
+            cmdline: Include cmdline options
+        """
+
+        if not isinstance(config, Config):
+            config = Config(config, self.definitions)
         return clean_config(config, file=file, cmdline=cmdline)
 
     def normalize_config(
         self,
-        options: T | Config[T],
+        config: T | Config[T],
         file: bool = False,
         cmdline: bool = False,
-        defaults: bool = True,
+        default: bool = True,
+        persistent: bool = True,
     ) -> Config[Values]:
-        if isinstance(options, Config):
-            config = options
-        else:
-            config = Config(options, self.definitions)
+        """
+        Creates an `OptionValues` dictionary with setting definitions taken from `self.definitions`
+        and values taken from `raw_options` and `raw_options_2' if defined.
+        Values are assigned so if the value is a dictionary mutating it will mutate the original.
+
+        Args:
+            config: The Config object to normalize options from
+            file: Include file options
+            cmdline: Include cmdline options
+            default: Include default values in the returned Config object
+            persistent: Include unknown keys in persistent groups
+        """
+
+        if not isinstance(config, Config):
+            config = Config(config, self.definitions)
         return normalize_config(
             config=config,
             file=file,
             cmdline=cmdline,
-            defaults=defaults,
+            default=default,
+            persistent=persistent,
         )
 
-    @overload
     def get_namespace(
         self,
-        options: Values,
+        config: Values | Config[Values],
         file: bool = False,
         cmdline: bool = False,
-        defaults: bool = True,
-        persistent: bool = True,
-    ) -> Namespace:
-        ...
-
-    @overload
-    def get_namespace(
-        self,
-        options: Config[Values],
-        file: bool = False,
-        cmdline: bool = False,
-        defaults: bool = True,
+        default: bool = True,
         persistent: bool = True,
     ) -> Config[Namespace]:
-        ...
+        """
+        Returns a Namespace object with options in the form "{group_name}_{setting_name}"
+        `options` should already be normalized or be a `Config[Namespace]`.
+        Throws an exception if the internal_name is duplicated
 
-    def get_namespace(
-        self,
-        options: Values | Config[Values],
-        file: bool = False,
-        cmdline: bool = False,
-        defaults: bool = True,
-        persistent: bool = True,
-    ) -> Config[Namespace] | Namespace:
-        if isinstance(options, Config):
-            self.definitions = options[1]
-            return get_namespace(options, file=file, cmdline=cmdline, defaults=defaults, persistent=persistent)
+        Args:
+            config: The Config object to turn into a namespace
+            file: Include file options
+            cmdline: Include cmdline options
+            default: Include default values in the returned Config object
+            persistent: Include unknown keys in persistent groups
+        """
+
+        if isinstance(config, Config):
+            self.definitions = config[1]
         else:
-            config = Config(options, self.definitions)
-            return get_namespace(config, file=file, cmdline=cmdline, defaults=defaults, persistent=persistent)
+            config = Config(config, self.definitions)
+        return get_namespace(config, file=file, cmdline=cmdline, default=default, persistent=persistent)
 
     def parse_file(self, filename: pathlib.Path) -> tuple[Config[Values], bool]:
+        """
+        Helper function to read options from a json dictionary from a file.
+        This is purely a convenience function.
+        If _anything_ more advanced is desired this should be handled by the application.
+
+        Args:
+            filename: A pathlib.Path object to read a JSON dictionary from
+        """
         return parse_file(filename=filename, definitions=self.definitions)
 
-    def save_file(self, options: T | Config[T], filename: pathlib.Path) -> bool:
-        if isinstance(options, Config):
-            return save_file(options, filename=filename)
-        return save_file(Config(options, self.definitions), filename=filename)
+    def save_file(self, config: T | Config[T], filename: pathlib.Path) -> bool:
+        """
+        Helper function to save options from a json dictionary to a file.
+        This is purely a convenience function.
+        If _anything_ more advanced is desired this should be handled by the application.
 
-    def parse_cmdline(self, args: list[str] | None = None, namespace: ns[T] = None) -> Config[Values]:
-        return parse_cmdline(self.definitions, self.description, self.epilog, args, namespace)
+        Args:
+            config: The options to save to a json dictionary
+            filename: A pathlib.Path object to save the json dictionary to
+        """
+        if not isinstance(config, Config):
+            config = Config(config, self.definitions)
+        return save_file(config, filename=filename)
+
+    def parse_cmdline(self, args: list[str] | None = None, config: ns[T] = None) -> Config[Values]:
+        """
+        Creates an `argparse.ArgumentParser` from cmdline settings in `self.definitions`.
+        `args` and `config` are passed to `argparse.ArgumentParser.parse_args`
+
+        Args:
+            args: Passed to argparse.ArgumentParser.parse_args
+            config: The Config or Namespace object to use as a Namespace passed to argparse.ArgumentParser.parse_args
+        """
+        return parse_cmdline(self.definitions, self.description, self.epilog, args, config)
 
     def parse_config(self, config_path: pathlib.Path, args: list[str] | None = None) -> tuple[Config[Values], bool]:
+        """
+        Convenience function to parse options from a json file and passes the resulting Config object to parse_cmdline.
+        This is purely a convenience function.
+        If _anything_ more advanced is desired this should be handled by the application.
+
+        Args:
+            config_path: A `pathlib.Path` object
+            args: Passed to argparse.ArgumentParser.parse_args
+        """
         return parse_config(self.definitions, self.description, self.epilog, config_path, args)
 
 
-def example(manager: Manager) -> None:
+__all__ = [
+    'Setting',
+    'Group',
+    'Values',
+    'Definitions',
+    'Config',
+    'generate_settings',
+    'sanitize_name',
+    'get_option',
+    'get_options',
+    'normalize_config',
+    'parse_file',
+    'clean_config',
+    'defaults',
+    'get_namespace',
+    'save_file',
+    'create_argparser',
+    'parse_cmdline',
+    'parse_config',
+    'Manager',
+]
+
+
+def example_group(manager: Manager) -> None:
     manager.add_setting(
         '--hello',
         default='world',
@@ -682,7 +770,7 @@ def example(manager: Manager) -> None:
     )
 
 
-def persistent(manager: Manager) -> None:
+def persistent_group(manager: Manager) -> None:
     manager.add_setting(
         '--test', '-t',
         default=False,
@@ -694,13 +782,13 @@ def _main(args: list[str] | None = None) -> None:
     settings_path = pathlib.Path('./settings.json')
     manager = Manager(description='This is an example', epilog='goodbye!')
 
-    manager.add_group('example', example)
-    manager.add_persistent_group('persistent', persistent)
+    manager.add_group('example', example_group)
+    manager.add_persistent_group('persistent', persistent_group)
 
     file_config, success = manager.parse_file(settings_path)
     file_namespace = manager.get_namespace(file_config, file=True, cmdline=True)
 
-    merged_config = manager.parse_cmdline(args=args, namespace=file_namespace)
+    merged_config = manager.parse_cmdline(args=args, config=file_namespace)
     merged_namespace = manager.get_namespace(merged_config, file=True, cmdline=True)
 
     print(f'Hello {merged_config.values["example"]["hello"]}')  # noqa: T201
