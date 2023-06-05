@@ -10,10 +10,10 @@ repos:
     -   id: name-tests-test
     -   id: requirements-txt-fixer
 -   repo: https://github.com/asottile/setup-cfg-fmt
-    rev: v2.2.0
+    rev: v2.3.0
     hooks:
     -   id: setup-cfg-fmt
--   repo: https://github.com/asottile/reorder_python_imports
+-   repo: https://github.com/asottile/reorder-python-imports
     rev: v3.9.0
     hooks:
     -   id: reorder-python-imports
@@ -24,11 +24,11 @@ repos:
     -   id: add-trailing-comma
         args: [--py36-plus]
 -   repo: https://github.com/asottile/dead
-    rev: v1.5.0
+    rev: v1.5.1
     hooks:
     -   id: dead
 -   repo: https://github.com/asottile/pyupgrade
-    rev: v3.3.2
+    rev: v3.4.0
     hooks:
     -   id: pyupgrade
         args: [--py38-plus]
@@ -42,6 +42,6 @@ repos:
     -   id: flake8
         additional_dependencies: [flake8-encodings, flake8-warnings, flake8-builtins, flake8-length, flake8-print]
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.2.0
+    rev: v1.3.0
     hooks:
     -   id: mypy
