@@ -190,6 +190,8 @@ class Setting:
     def _guess_type(self) -> type | Literal['Any'] | None:
         if self.type is None and self.action is None:
             if self.cmdline:
+                if self.nargs in ('+', '*') or isinstance(self.nargs, int) and self.nargs > 1:
+                    return List[str]
                 return str
             else:
                 if not self.cmdline and self.default is not None:
@@ -255,6 +257,11 @@ class Setting:
         return self.argparse_args, self.filter_argparse_kwargs()
 
 
+class TypedNS:
+    def __init__(self) -> None:
+        raise TypeError('TypedNS cannot be instantiated')
+
+
 class Group(NamedTuple):
     persistent: bool
     v: dict[str, Setting]
@@ -263,7 +270,7 @@ class Group(NamedTuple):
 Values = Dict[str, Dict[str, Any]]
 Definitions = Dict[str, Group]
 
-T = TypeVar('T', Values, Namespace)
+T = TypeVar('T', bound=Union[Values, Namespace, TypedNS])
 
 
 class Config(NamedTuple, Generic[T]):
@@ -273,12 +280,12 @@ class Config(NamedTuple, Generic[T]):
 
 if TYPE_CHECKING:
     ArgParser = Union[argparse._MutuallyExclusiveGroup, argparse._ArgumentGroup, argparse.ArgumentParser]
-    ns = Namespace | Config[T] | None
+    ns = Namespace | TypedNS | Config[T] | None
 
 
 def generate_ns(definitions: Definitions) -> str:
     imports = ['from __future__ import annotations', 'import typing', 'import settngs']
-    ns = 'class settngs_namespace(settngs.Namespace):\n'
+    ns = 'class settngs_namespace(settngs.TypedNS):\n'
     types = []
     for group_name, group in definitions.items():
         for setting_name, setting in group.v.items():
@@ -288,7 +295,7 @@ def generate_ns(definitions: Definitions) -> str:
             type_name = 'Any'
             if isinstance(t, str):
                 type_name = t
-            elif type(t) == types_GenericAlias:
+            elif isinstance(t, types_GenericAlias):
                 type_name = str(t)
             elif isinstance(t, type):
                 type_name = t.__name__
@@ -313,7 +320,7 @@ def sanitize_name(name: str) -> str:
     return re.sub('[' + re.escape(' -_,.!@#$%^&*(){}[]\',."<>;:') + ']+', '_', name).strip('_')
 
 
-def get_option(options: Values | Namespace, setting: Setting) -> tuple[Any, bool]:
+def get_option(options: Values | Namespace | TypedNS, setting: Setting) -> tuple[Any, bool]:
     """
     Helper function to retrieve the value for a setting and if the current value is the default value
 
@@ -337,7 +344,7 @@ def get_options(config: Config[T], group: str) -> dict[str, Any]:
         group: The name of the group to retrieve
     """
     if isinstance(config[0], dict):
-        values = config[0].get(group, {}).copy()
+        values: dict[str, Any] = config[0].get(group, {}).copy()
     else:
         internal_names = {x.internal_name: x for x in config[1][group].v.values()}
         values = {}
@@ -470,11 +477,14 @@ def get_namespace(
     if not file and not cmdline:
         raise ValueError('Invalid parameters: you must set either file or cmdline to True')
 
-    if isinstance(config.values, Namespace):
+    options: Values
+    definitions: Definitions
+    if isinstance(config.values, dict):
+        options = config.values
+        definitions = config.definitions
+    else:
         cfg = normalize_config(config, file=file, cmdline=cmdline, default=default, persistent=persistent)
         options, definitions = cfg
-    else:
-        options, definitions = config
     namespace = Namespace()
     for group_name, group in definitions.items():
 
@@ -573,7 +583,7 @@ def parse_cmdline(
         args: Passed to argparse.ArgumentParser.parse_args
         config: The Config or Namespace object to use as a Namespace passed to argparse.ArgumentParser.parse_args
     """
-    namespace = None
+    namespace: Namespace | TypedNS | None = None
     if isinstance(config, Config):
         if isinstance(config.values, Namespace):
             namespace = config.values
@@ -581,6 +591,7 @@ def parse_cmdline(
             namespace = get_namespace(config, file=True, cmdline=True, default=False)[0]
     else:
         namespace = config
+
     argparser = create_argparser(definitions, description, epilog)
     ns = argparser.parse_args(args, namespace=namespace)
 

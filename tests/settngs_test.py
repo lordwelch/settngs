@@ -19,7 +19,7 @@ from testing.settngs import success
 
 if sys.version_info < (3, 9):  # pragma: no cover
     from typing import List
-else:
+else:  # pragma: no cover
     List = list
 
 
@@ -541,7 +541,7 @@ import settngs
     if typ == 'tests.settngs_test.test_type':
         src += 'import tests.settngs_test\n'
     src += '''
-class settngs_namespace(settngs.Namespace):
+class settngs_namespace(settngs.TypedNS):
 '''
     if typ is None:
         src += '    ...\n'
