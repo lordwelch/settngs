@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import pathlib
+import sys
 from collections import defaultdict
 from typing import Generator
 
@@ -13,6 +15,12 @@ from settngs import Group
 from testing.settngs import example
 from testing.settngs import failure
 from testing.settngs import success
+
+
+if sys.version_info < (3, 9):  # pragma: no cover
+    from typing import List
+else:
+    List = list
 
 
 @pytest.fixture
@@ -431,6 +439,120 @@ def test_adding_to_existing_persistent_group(settngs_manager: settngs.Manager, t
     settngs_manager2.add_persistent_group('tst', tst)
 
     assert default_to_regular(settngs_manager.definitions) == default_to_regular(settngs_manager2.definitions)
+
+
+class test_type(int):
+    ...
+
+
+def _typed_function(something: str) -> test_type:  # pragma: no cover
+    return test_type()
+
+
+def _untyped_function(something):
+    ...
+
+
+class _customAction(argparse.Action):  # pragma: no cover
+
+    def __init__(
+        self,
+        option_strings,
+        dest,
+        const=None,
+        default=None,
+        required=False,
+        help=None,  # noqa: A002
+        metavar=None,
+    ):
+        super().__init__(
+            option_strings=option_strings,
+            dest=dest,
+            nargs=0,
+            const=const,
+            default=default,
+            required=required,
+            help=help,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, 'Something')
+
+
+types = (
+    (settngs.Setting('-t', '--test'), str),
+    (settngs.Setting('-t', '--test', cmdline=False), 'Any'),
+    (settngs.Setting('-t', '--test', default=1, file=True, cmdline=False), int),
+    (settngs.Setting('-t', '--test', action='count'), int),
+    (settngs.Setting('-t', '--test', action='append'), List[str]),
+    (settngs.Setting('-t', '--test', action='extend'), List[str]),
+    (settngs.Setting('-t', '--test', action='store_const', const=1), int),
+    (settngs.Setting('-t', '--test', action='append_const', const=1), list),
+    (settngs.Setting('-t', '--test', action='store_true'), bool),
+    (settngs.Setting('-t', '--test', action='store_false'), bool),
+    (settngs.Setting('-t', '--test', action=settngs.BooleanOptionalAction), bool),
+    (settngs.Setting('-t', '--test', action=_customAction), 'Any'),
+    (settngs.Setting('-t', '--test', action='help'), None),
+    (settngs.Setting('-t', '--test', action='version'), None),
+    (settngs.Setting('-t', '--test', type=int), int),
+    (settngs.Setting('-t', '--test', type=_typed_function), test_type),
+    (settngs.Setting('-t', '--test', type=_untyped_function, default=1), int),
+    (settngs.Setting('-t', '--test', type=_untyped_function), 'Any'),
+)
+
+
+@pytest.mark.parametrize('setting,typ', types)
+def test_guess_type(setting, typ):
+    guessed_type = setting._guess_type()
+    assert guessed_type == typ
+
+
+settings = (
+    (lambda parser: parser.add_setting('-t', '--test'), 'str'),
+    (lambda parser: parser.add_setting('-t', '--test', cmdline=False), 'typing.Any'),
+    (lambda parser: parser.add_setting('-t', '--test', default=1, file=True, cmdline=False), 'int'),
+    (lambda parser: parser.add_setting('-t', '--test', action='count'), 'int'),
+    (lambda parser: parser.add_setting('-t', '--test', action='append'), List[str]),
+    (lambda parser: parser.add_setting('-t', '--test', action='extend'), List[str]),
+    (lambda parser: parser.add_setting('-t', '--test', action='store_const', const=1), 'int'),
+    (lambda parser: parser.add_setting('-t', '--test', action='append_const', const=1), 'list'),
+    (lambda parser: parser.add_setting('-t', '--test', action='store_true'), 'bool'),
+    (lambda parser: parser.add_setting('-t', '--test', action='store_false'), 'bool'),
+    (lambda parser: parser.add_setting('-t', '--test', action=settngs.BooleanOptionalAction), 'bool'),
+    (lambda parser: parser.add_setting('-t', '--test', action=_customAction), 'typing.Any'),
+    (lambda parser: parser.add_setting('-t', '--test', action='help'), None),
+    (lambda parser: parser.add_setting('-t', '--test', action='version'), None),
+    (lambda parser: parser.add_setting('-t', '--test', type=int), 'int'),
+    (lambda parser: parser.add_setting('-t', '--test', type=_typed_function), 'tests.settngs_test.test_type'),
+    (lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=1), 'int'),
+    (lambda parser: parser.add_setting('-t', '--test', type=_untyped_function), 'typing.Any'),
+)
+
+
+@pytest.mark.parametrize('set_options,typ', settings)
+def test_generate_ns(settngs_manager, set_options, typ):
+    settngs_manager.add_group('test', set_options)
+
+    src = '''\
+from __future__ import annotations
+import typing
+import settngs
+'''
+    if typ == 'tests.settngs_test.test_type':
+        src += 'import tests.settngs_test\n'
+    src += '''
+class settngs_namespace(settngs.Namespace):
+'''
+    if typ is None:
+        src += '    ...\n'
+    else:
+        src += f'    {settngs_manager.definitions["test"].v["test"].internal_name}: {typ}\n'
+
+    generated_src = settngs_manager.generate_ns()
+
+    assert generated_src == src
+
+    ast.parse(generated_src)
 
 
 def test_example(capsys, tmp_path, monkeypatch):

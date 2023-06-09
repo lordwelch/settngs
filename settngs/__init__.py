@@ -6,6 +6,7 @@ import logging
 import pathlib
 import re
 import sys
+import typing
 from argparse import Namespace
 from collections import defaultdict
 from collections.abc import Sequence
@@ -13,6 +14,7 @@ from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import Generic
+from typing import Literal
 from typing import NoReturn
 from typing import TYPE_CHECKING
 from typing import TypeVar
@@ -27,6 +29,9 @@ else:  # pragma: no cover
 
 
 if sys.version_info < (3, 9):  # pragma: no cover
+    from typing import List
+    from typing import _GenericAlias as types_GenericAlias
+
     def removeprefix(self: str, prefix: str, /) -> str:
         if self.startswith(prefix):
             return self[len(prefix):]
@@ -73,6 +78,8 @@ if sys.version_info < (3, 9):  # pragma: no cover
             if option_string in self.option_strings:
                 setattr(namespace, self.dest, not option_string.startswith('--no-'))
 else:  # pragma: no cover
+    List = list
+    from types import GenericAlias as types_GenericAlias
     from argparse import BooleanOptionalAction
     removeprefix = str.removeprefix
 
@@ -84,7 +91,7 @@ class Setting:
         *names: str,
         action: type[argparse.Action] | str | None = None,
         nargs: str | int | None = None,
-        const: str | None = None,
+        const: Any | None = None,
         default: Any | None = None,
         type: Callable[..., Any] | None = None,  # noqa: A002
         choices: Sequence[Any] | None = None,
@@ -180,6 +187,45 @@ class Setting:
             return NotImplemented
         return self.__dict__ == other.__dict__
 
+    def _guess_type(self) -> type | Literal['Any'] | None:
+        if self.type is None and self.action is None:
+            if self.cmdline:
+                return str
+            else:
+                if not self.cmdline and self.default is not None:
+                    return type(self.default)
+                return 'Any'
+
+        if isinstance(self.type, type):
+            return self.type
+
+        if self.type is not None:
+            type_hints = typing.get_type_hints(self.type)
+            if 'return' in type_hints and isinstance(type_hints['return'], type):
+                return type_hints['return']
+            if self.default is not None:
+                return type(self.default)
+            return 'Any'
+
+        if self.action in ('store_true', 'store_false', BooleanOptionalAction):
+            return bool
+
+        if self.action in ('store_const',):
+            return type(self.const)
+
+        if self.action in ('count',):
+            return int
+
+        if self.action in ('append', 'extend'):
+            return List[str]
+
+        if self.action in ('append_const',):
+            return list  # list[type(self.const)]
+
+        if self.action in ('help', 'version'):
+            return None
+        return 'Any'
+
     def get_dest(self, prefix: str, names: Sequence[str], dest: str | None) -> tuple[str, str, bool]:
         dest_name = None
         flag = False
@@ -228,6 +274,39 @@ class Config(NamedTuple, Generic[T]):
 if TYPE_CHECKING:
     ArgParser = Union[argparse._MutuallyExclusiveGroup, argparse._ArgumentGroup, argparse.ArgumentParser]
     ns = Namespace | Config[T] | None
+
+
+def generate_ns(definitions: Definitions) -> str:
+    imports = ['from __future__ import annotations', 'import typing', 'import settngs']
+    ns = 'class settngs_namespace(settngs.Namespace):\n'
+    types = []
+    for group_name, group in definitions.items():
+        for setting_name, setting in group.v.items():
+            t = setting._guess_type()
+            if t is None:
+                continue
+            type_name = 'Any'
+            if isinstance(t, str):
+                type_name = t
+            elif type(t) == types_GenericAlias:
+                type_name = str(t)
+            elif isinstance(t, type):
+                type_name = t.__name__
+                if t.__module__ != 'builtins':
+                    imports.append(f'import {t.__module__}')
+                    type_name = t.__module__ + '.' + type_name
+            if type_name == 'Any':
+                type_name = 'typing.Any'
+
+            types.append(f'    {setting.internal_name}: {type_name}')
+        if types and types[-1] != '':
+            types.append('')
+
+    if not types or all(x == '' for x in types):
+        ns += '    ...\n'
+        types = ['']
+
+    return '\n'.join(imports) + '\n\n' + ns + '\n'.join(types)
 
 
 def sanitize_name(name: str) -> str:
@@ -337,7 +416,9 @@ def parse_file(definitions: Definitions, filename: pathlib.Path) -> tuple[Config
                 opts = json.load(file)
             if isinstance(opts, dict):
                 options = opts
-        except Exception:
+            else:  # pragma: no cover
+                raise Exception('Loaded file is not a JSON Dictionary')
+        except Exception:  # pragma: no cover
             logger.exception('Failed to load config file: %s', filename)
             success = False
     else:
@@ -550,6 +631,9 @@ class Manager:
 
         self.exclusive_group = False
         self.current_group_name = ''
+
+    def generate_ns(self) -> str:
+        return generate_ns(self.definitions)
 
     def create_argparser(self) -> None:
         self.argparser = create_argparser(self.definitions, self.description, self.epilog)
