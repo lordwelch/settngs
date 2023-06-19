@@ -14,21 +14,21 @@ repos:
     hooks:
     -   id: setup-cfg-fmt
 -   repo: https://github.com/asottile/reorder-python-imports
-    rev: v3.9.0
+    rev: v3.10.0
     hooks:
     -   id: reorder-python-imports
         args: [--py38-plus, --add-import, 'from __future__ import annotations']
 -   repo: https://github.com/asottile/add-trailing-comma
-    rev: v2.4.0
+    rev: v2.5.1
     hooks:
     -   id: add-trailing-comma
         args: [--py36-plus]
 -   repo: https://github.com/asottile/dead
-    rev: v1.5.1
+    rev: v1.5.2
     hooks:
     -   id: dead
 -   repo: https://github.com/asottile/pyupgrade
-    rev: v3.4.0
+    rev: v3.7.0
     hooks:
     -   id: pyupgrade
         args: [--py38-plus]
