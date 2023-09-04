@@ -141,10 +141,9 @@ class Setting:
             metavar = dest.upper()
 
         # If we are not a flag, no '--' or '-' in front
-        # we prefix the first name with the group as argparse sets dest to args[0]
-        # I believe internal name may be able to be used here
+        # we use internal_name as argparse sets dest to args[0]
         if not flag:
-            args = tuple((f'{group}_{names[0]}'.lstrip('_'), *names[1:]))
+            args = tuple((self.internal_name, *names[1:]))
 
         self.action = action
         self.nargs = nargs
@@ -232,6 +231,7 @@ class Setting:
         dest_name = None
         flag = False
 
+        prefix = sanitize_name(prefix)
         for n in names:
             if n.startswith('--'):
                 flag = True
@@ -877,7 +877,7 @@ def _main(args: list[str] | None = None) -> None:
     settings_path = pathlib.Path('./settings.json')
     manager = Manager(description='This is an example', epilog='goodbye!')
 
-    manager.add_group('example', example_group)
+    manager.add_group('Example Group', example_group)
     manager.add_persistent_group('persistent', persistent_group)
 
     file_config, success = manager.parse_file(settings_path)
@@ -886,14 +886,14 @@ def _main(args: list[str] | None = None) -> None:
     merged_config = manager.parse_cmdline(args=args, config=file_namespace)
     merged_namespace = manager.get_namespace(merged_config, file=True, cmdline=True)
 
-    print(f'Hello {merged_config.values["example"]["hello"]}')  # noqa: T201
-    if merged_namespace.values.example_save:
+    print(f'Hello {merged_config.values["Example Group"]["hello"]}')  # noqa: T201
+    if merged_namespace.values.Example_Group_save:
         if manager.save_file(merged_config, settings_path):
             print(f'Successfully saved settings to {settings_path}')  # noqa: T201
         else:
             print(f'Failed saving settings to a {settings_path}')  # noqa: T201
-    if merged_namespace.values.example_verbose:
-        print(f'{merged_namespace.values.example_verbose=}')  # noqa: T201
+    if merged_namespace.values.Example_Group_verbose:
+        print(f'{merged_namespace.values.Example_Group_verbose=}')  # noqa: T201
 
 
 if __name__ == '__main__':

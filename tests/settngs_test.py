@@ -81,6 +81,11 @@ class TestValues:
         defaults, _ = settngs_manager.defaults()
         assert defaults['tst']['test'] == 'hello'
 
+    def test_get_defaults_group_space(self, settngs_manager):
+        settngs_manager.add_group('Testing tst', lambda parser: parser.add_setting('--test', default='hello'))
+        defaults, _ = settngs_manager.defaults()
+        assert defaults['Testing tst']['test'] == 'hello'
+
     def test_cmdline_only(self, settngs_manager):
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', file=False))
         settngs_manager.add_group('tst2', lambda parser: parser.add_setting('--test2', default='hello', cmdline=False))
@@ -160,6 +165,11 @@ class TestNamespace:
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
         defaults, _ = settngs_manager.get_namespace(settngs_manager.defaults(), file=True, cmdline=True)
         assert defaults.tst_test == 'hello'
+
+    def test_get_defaults_group_space(self, settngs_manager):
+        settngs_manager.add_group('Testing tst', lambda parser: parser.add_setting('--test', default='hello'))
+        defaults, _ = settngs_manager.get_namespace(settngs_manager.defaults(), file=True, cmdline=True)
+        assert defaults.Testing_tst_test == 'hello'
 
     def test_cmdline_only(self, settngs_manager):
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', file=False))
@@ -564,7 +574,7 @@ def test_example(capsys, tmp_path, monkeypatch):
     for args, expected_out, expected_file in example:
         if args == ['manual settings.json']:
             settings_file.unlink()
-            settings_file.write_text('{\n  "example": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false,\n    "hello": "world"\n  }\n}\n')
+            settings_file.write_text('{\n  "Example Group": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false,\n    "hello": "world"\n  }\n}\n')
             i += 1
             continue
         else:
