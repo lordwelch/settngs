@@ -826,11 +826,12 @@ class Manager:
 
 __all__ = [
     'Setting',
+    'TypedNS',
     'Group',
     'Values',
     'Definitions',
     'Config',
-    'generate_settings',
+    'generate_ns',
     'sanitize_name',
     'get_option',
     'get_options',
