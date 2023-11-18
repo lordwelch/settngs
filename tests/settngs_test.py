@@ -89,7 +89,7 @@ def test_exclusive_group(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'), exclusive_group=True)
     settngs_manager.create_argparser()
     args = settngs_manager.argparser.parse_args(['--test', 'never'])
-    assert args.tst_test == 'never'
+    assert args.tst__test == 'never'
 
     with pytest.raises(SystemExit):
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test2', default='hello'), exclusive_group=True)
@@ -213,6 +213,29 @@ class TestValues:
         assert normalized['persistent']['hello'] == 'success'
         assert normalized['persistent']['world'] == 'world'
 
+    def test_unknown_group(self):
+        manager = settngs.Manager()
+        manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
+        manager.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
+
+        manager_unknown = settngs.Manager()
+        manager_unknown.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
+        # This manager doesn't know about this group
+        # manager_unknown.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
+
+        defaults = manager.defaults()
+        defaults.values['test'] = 'fail'  # type: ignore[assignment] # Not defined in manager, should be removed
+        defaults.values['persistent']['hello'] = 'success'  # Group is not defined in manager_unknown, should stay
+
+        normalized, _ = manager_unknown.normalize_config(defaults.values, file=True)
+
+        assert 'test' not in normalized
+        assert 'tst' in normalized
+        assert 'test' in normalized['tst']
+        assert normalized['tst']['test'] == 'hello'
+        assert normalized['persistent']['hello'] == 'success'
+        assert normalized['persistent']['world'] == 'world'
+
 
 class TestNamespace:
 
@@ -230,12 +253,12 @@ class TestNamespace:
     def test_get_defaults_group(self, settngs_manager):
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
         defaults, _ = settngs_manager.get_namespace(settngs_manager.defaults(), file=True, cmdline=True)
-        assert defaults.tst_test == 'hello'
+        assert defaults.tst__test == 'hello'
 
     def test_get_defaults_group_space(self, settngs_manager):
         settngs_manager.add_group('Testing tst', lambda parser: parser.add_setting('--test', default='hello'))
         defaults, _ = settngs_manager.get_namespace(settngs_manager.defaults(), file=True, cmdline=True)
-        assert defaults.Testing_tst_test == 'hello'
+        assert defaults.Testing_tst__test == 'hello'
 
     def test_cmdline_only(self, settngs_manager):
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello', file=False))
@@ -244,11 +267,11 @@ class TestNamespace:
         file_normalized, _ = settngs_manager.get_namespace(settngs_manager.normalize_config(settngs_manager.defaults(), file=True), file=True)
         cmdline_normalized, _ = settngs_manager.get_namespace(settngs_manager.normalize_config(settngs_manager.defaults(), cmdline=True), cmdline=True)
 
-        assert 'tst_test' not in file_normalized.__dict__
-        assert 'tst2_test2' in file_normalized.__dict__
+        assert 'tst__test' not in file_normalized.__dict__
+        assert 'tst2__test2' in file_normalized.__dict__
 
-        assert 'tst_test' in cmdline_normalized.__dict__
-        assert 'tst2_test2' not in cmdline_normalized.__dict__
+        assert 'tst__test' in cmdline_normalized.__dict__
+        assert 'tst2__test2' not in cmdline_normalized.__dict__
 
     def test_cmdline_only_persistent_group(self, settngs_manager):
         settngs_manager.add_persistent_group('tst', lambda parser: parser.add_setting('--test', default='hello', file=False))
@@ -257,11 +280,11 @@ class TestNamespace:
         file_normalized, _ = settngs_manager.get_namespace(settngs_manager.normalize_config(settngs_manager.defaults(), file=True), file=True)
         cmdline_normalized, _ = settngs_manager.get_namespace(settngs_manager.normalize_config(settngs_manager.defaults(), cmdline=True), cmdline=True)
 
-        assert 'tst_test' not in file_normalized.__dict__
-        assert 'tst2_test2' in file_normalized.__dict__
+        assert 'tst__test' not in file_normalized.__dict__
+        assert 'tst2__test2' in file_normalized.__dict__
 
-        assert 'tst_test' in cmdline_normalized.__dict__
-        assert 'tst2_test2' not in cmdline_normalized.__dict__
+        assert 'tst__test' in cmdline_normalized.__dict__
+        assert 'tst2__test2' not in cmdline_normalized.__dict__
 
     def test_normalize_defaults(self, settngs_manager):
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
@@ -273,12 +296,12 @@ class TestNamespace:
         assert defaults_normalized.values.__dict__ == {}
 
         non_defaults = settngs_manager.get_namespace(settngs_manager.defaults(), file=True, cmdline=True)
-        non_defaults.values.tst_test = 'world'
-        non_defaults.values.tst_persistent_test = 'world'
+        non_defaults.values.tst__test = 'world'
+        non_defaults.values.tst_persistent__test = 'world'
         non_defaults_normalized = settngs_manager.get_namespace(settngs_manager.normalize_config(non_defaults, file=True, default=False), file=True, default=False)
 
-        assert non_defaults_normalized.values.tst_test == 'world'
-        assert non_defaults_normalized.values.tst_persistent_test == 'world'
+        assert non_defaults_normalized.values.tst__test == 'world'
+        assert non_defaults_normalized.values.tst_persistent__test == 'world'
 
     def test_normalize(self, settngs_manager):
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
@@ -286,15 +309,37 @@ class TestNamespace:
 
         defaults = settngs_manager.get_namespace(settngs_manager.defaults(), file=True, cmdline=True)
         defaults.values.test = 'fail'  # Not defined in settngs_manager, should be removed
-        defaults.values.persistent_hello = 'success'  # Not defined in settngs_manager, should stay
+        defaults.values.persistent__hello = 'success'  # Not defined in settngs_manager, should stay
 
         normalized, _ = settngs_manager.get_namespace(settngs_manager.normalize_config(defaults, file=True), file=True)
 
         assert not hasattr(normalized, 'test')
-        assert hasattr(normalized, 'tst_test')
-        assert normalized.tst_test == 'hello'
-        assert normalized.persistent_hello == 'success'
-        assert normalized.persistent_world == 'world'
+        assert hasattr(normalized, 'tst__test')
+        assert normalized.tst__test == 'hello'
+        assert normalized.persistent__hello == 'success'
+        assert normalized.persistent__world == 'world'
+
+    def test_normalize_unknown(self, settngs_manager):
+        manager = settngs.Manager()
+        manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
+        manager.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
+
+        manager_unknown = settngs.Manager()
+        manager_unknown.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
+        # This manager doesn't know about this group
+        # manager_unknown.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
+
+        defaults = manager.get_namespace(manager.defaults(), file=True, cmdline=True)
+        defaults.values.test = 'fail'  # Not defined in manager, should be removed
+        defaults.values.persistent__hello = 'success'  # Not defined in manager, should stay
+
+        normalized, _ = manager_unknown.get_namespace(defaults.values, file=True)
+
+        assert not hasattr(normalized, 'test')
+        assert hasattr(normalized, 'tst__test')
+        assert normalized.tst__test == 'hello'
+        assert normalized.persistent__hello == 'success'
+        assert normalized.persistent__world == 'world'
 
 
 def test_get_namespace_with_namespace(settngs_manager):
@@ -306,7 +351,7 @@ def test_get_namespace_with_namespace(settngs_manager):
 def test_get_namespace_group(settngs_manager):
     settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
     defaults, _ = settngs_manager.get_namespace(settngs_manager.defaults(), file=True)
-    assert defaults.tst_test == 'hello'
+    assert defaults.tst__test == 'hello'
 
 
 def test_clean_config(settngs_manager):
@@ -337,8 +382,8 @@ def test_parse_cmdline(settngs_manager):
 
 namespaces = (
     lambda definitions: settngs.Config({'tst': {'test': 'fail', 'test2': 'success'}}, definitions),
-    lambda definitions: settngs.Config(argparse.Namespace(tst_test='fail', tst_test2='success'), definitions),
-    lambda definitions: argparse.Namespace(tst_test='fail', tst_test2='success'),
+    lambda definitions: settngs.Config(argparse.Namespace(tst__test='fail', tst__test2='success'), definitions),
+    lambda definitions: argparse.Namespace(tst__test='fail', tst__test2='success'),
 )
 
 

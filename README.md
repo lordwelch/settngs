@@ -29,14 +29,14 @@ $ python -m settngs
 Hello lordwelch
 $ python -m settngs -v
 Hello lordwelch
-merged_namespace.values.example_verbose=True
+merged_namespace.values.Example_Group__verbose=True
 $ python -m settngs -v -s
 Hello lordwelch
 Successfully saved settings to settings.json
-merged_namespace.values.example_verbose=True
+merged_namespace.values.Example_Group__verbose=True
 $ python -m settngs
 Hello lordwelch
-merged_namespace.values.example_verbose=True
+merged_namespace.values.Example_Group__verbose=True
 $ cat >settings.json << EOF
 {
   "example": {

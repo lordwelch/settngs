@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import logging
 import pathlib
@@ -247,7 +248,7 @@ class Setting:
         if not dest_name.isidentifier():
             raise Exception(f'Cannot use {dest_name} in a namespace')
 
-        internal_name = f'{prefix}_{dest_name}'.lstrip('_')
+        internal_name = f'{prefix}__{dest_name}'.lstrip('_')
         return internal_name, dest_name, flag
 
     def filter_argparse_kwargs(self) -> dict[str, Any]:
@@ -376,9 +377,32 @@ def get_options(config: Config[T], group: str) -> dict[str, Any]:
                 if name in internal_names:
                     values[internal_names[name].dest] = value
                 else:
-                    values[removeprefix(name, f'{group}_')] = value
-
+                    values[removeprefix(name, f'{group}').lstrip('_')] = value
     return values
+
+
+def get_groups(values: Values | Namespace | TypedNS) -> list[str]:
+    if isinstance(values, dict):
+        return [x[0] for x in values.items() if isinstance(x[1], dict)]
+    if isinstance(values, Namespace):
+        groups = set()
+        for name in values.__dict__:
+            if '__' in name:
+                group, _, _ = name.partition('__')
+                groups.add(group.replace('_', ' '))
+            else:
+                groups.add('')
+        return list(groups)
+    return []
+
+
+def _get_internal_definitions(config: Config[T], persistent: bool) -> Definitions:
+    definitions = copy.deepcopy(dict(config.definitions))
+    if persistent:
+        for group_name in get_groups(config.values):
+            if group_name not in definitions:
+                definitions[group_name] = Group(True, {})
+    return defaultdict(lambda: Group(False, {}), definitions)
 
 
 def normalize_config(
@@ -398,18 +422,19 @@ def normalize_config(
         file: Include file options
         cmdline: Include cmdline options
         default: Include default values in the returned Config object
-        persistent: Include unknown keys in persistent groups
+        persistent: Include unknown keys in persistent groups and unknown groups
     """
 
     if not file and not cmdline:
         raise ValueError('Invalid parameters: you must set either file or cmdline to True')
 
     normalized: Values = {}
-    options, definitions = config
+    options = config.values
+    definitions = _get_internal_definitions(config=config, persistent=persistent)
     for group_name, group in definitions.items():
         group_options = {}
         if group.persistent and persistent:
-            group_options = get_options(config, group_name)
+            group_options = get_options(Config(options, definitions), group_name)
         for setting_name, setting in group.v.items():
             if (setting.cmdline and cmdline) or (setting.file and file):
                 # Ensures the option exists with the default if not already set
@@ -424,7 +449,8 @@ def normalize_config(
                 # Setting type (file or cmdline) has not been requested and should be removed for persistent groups
                 del group_options[setting_name]
         normalized[group_name] = group_options
-    return Config(normalized, definitions)
+
+    return Config(normalized, config.definitions)
 
 
 def parse_file(definitions: Definitions, filename: pathlib.Path) -> tuple[Config[Values], bool]:
@@ -467,7 +493,7 @@ def clean_config(
         file: Include file options
         cmdline: Include cmdline options
         default: Include default values in the returned Config object
-        persistent: Include unknown keys in persistent groups
+        persistent: Include unknown keys in persistent groups and unknown groups
     """
 
     cleaned, _ = normalize_config(config, file=file, cmdline=cmdline, default=default, persistent=persistent)
@@ -493,24 +519,22 @@ def get_namespace(
         file: Include file options
         cmdline: Include cmdline options
         default: Include default values in the returned Config object
-        persistent: Include unknown keys in persistent groups
+        persistent: Include unknown keys in persistent groups and unknown groups
     """
-
     if not file and not cmdline:
         raise ValueError('Invalid parameters: you must set either file or cmdline to True')
 
     options: Values
-    definitions: Definitions
+    definitions = _get_internal_definitions(config=config, persistent=persistent)
     if isinstance(config.values, dict):
         options = config.values
-        definitions = config.definitions
     else:
         cfg = normalize_config(config, file=file, cmdline=cmdline, default=default, persistent=persistent)
-        options, definitions = cfg
+        options = cfg.values
     namespace = Namespace()
     for group_name, group in definitions.items():
 
-        group_options = get_options(config, group_name)
+        group_options = get_options(Config(options, definitions), group_name)
         if group.persistent and persistent:
             for name, value in group_options.items():
                 if name in group.v:
@@ -519,7 +543,7 @@ def get_namespace(
                     internal_name = group.v[name].internal_name
                 else:
                     setting_file = setting_cmdline = True
-                    internal_name, is_default = f'{group_name}_' + sanitize_name(name), None
+                    internal_name, is_default = f'{group_name}__' + sanitize_name(name), None
 
                 if ((setting_cmdline and cmdline) or (setting_file and file)) and (not is_default or default):
                     setattr(namespace, internal_name, value)
@@ -531,7 +555,7 @@ def get_namespace(
                 if not is_default or default:
                     # User has set a custom value or has requested the default value
                     setattr(namespace, setting.internal_name, value)
-    return Config(namespace, definitions)
+    return Config(namespace, config.definitions)
 
 
 def save_file(
@@ -660,10 +684,11 @@ class Manager:
         self.description = description
         self.epilog = epilog
 
+        self.definitions: Definitions
         if isinstance(definitions, Config):
-            self.definitions = definitions.definitions
+            self.definitions = defaultdict(lambda: Group(False, {}), dict(definitions.definitions) or {})
         else:
-            self.definitions = defaultdict(lambda: Group(False, {}), definitions or {})
+            self.definitions = defaultdict(lambda: Group(False, {}), dict(definitions or {}))
 
         self.exclusive_group = False
         self.current_group_name = ''
@@ -766,7 +791,7 @@ class Manager:
             file: Include file options
             cmdline: Include cmdline options
             default: Include default values in the returned Config object
-            persistent: Include unknown keys in persistent groups
+            persistent: Include unknown keys in persistent groups and unknown groups
         """
 
         return normalize_config(
@@ -779,7 +804,7 @@ class Manager:
 
     def get_namespace(
         self,
-        config: Values | Config[Values],
+        config: T | Config[T],
         file: bool = False,
         cmdline: bool = False,
         default: bool = True,
@@ -795,7 +820,7 @@ class Manager:
             file: Include file options
             cmdline: Include cmdline options
             default: Include default values in the returned Config object
-            persistent: Include unknown keys in persistent groups
+            persistent: Include unknown keys in persistent groups and unknown groups
         """
 
         return get_namespace(
@@ -915,13 +940,13 @@ def _main(args: list[str] | None = None) -> None:
     merged_namespace = manager.get_namespace(merged_config, file=True, cmdline=True)
 
     print(f'Hello {merged_config.values["Example Group"]["hello"]}')  # noqa: T201
-    if merged_namespace.values.Example_Group_save:
+    if merged_namespace.values.Example_Group__save:
         if manager.save_file(merged_config, settings_path):
             print(f'Successfully saved settings to {settings_path}')  # noqa: T201
         else:  # pragma: no cover
             print(f'Failed saving settings to a {settings_path}')  # noqa: T201
-    if merged_namespace.values.Example_Group_verbose:
-        print(f'{merged_namespace.values.Example_Group_verbose=}')  # noqa: T201
+    if merged_namespace.values.Example_Group__verbose:
+        print(f'{merged_namespace.values.Example_Group__verbose=}')  # noqa: T201
 
 
 if __name__ == '__main__':

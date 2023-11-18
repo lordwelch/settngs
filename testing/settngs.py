@@ -24,22 +24,22 @@ example: list[tuple[list[str], str, str]] = [
     ),
     (
         ['-v'],
-        'Hello lordwelch\nmerged_namespace.values.Example_Group_verbose=True\n',
+        'Hello lordwelch\nmerged_namespace.values.Example_Group__verbose=True\n',
         '{\n  "Example Group": {\n    "hello": "lordwelch",\n    "verbose": false\n  },\n  "persistent": {\n    "test": false\n  }\n}\n',
     ),
     (
         ['-v', '-s'],
-        'Hello lordwelch\nSuccessfully saved settings to settings.json\nmerged_namespace.values.Example_Group_verbose=True\n',
+        'Hello lordwelch\nSuccessfully saved settings to settings.json\nmerged_namespace.values.Example_Group__verbose=True\n',
         '{\n  "Example Group": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false\n  }\n}\n',
     ),
     (
         [],
-        'Hello lordwelch\nmerged_namespace.values.Example_Group_verbose=True\n',
+        'Hello lordwelch\nmerged_namespace.values.Example_Group__verbose=True\n',
         '{\n  "Example Group": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false\n  }\n}\n',
     ),
     (
         ['manual settings.json'],
-        'Hello lordwelch\nmerged_namespace.values.Example_Group_verbose=True\n',
+        'Hello lordwelch\nmerged_namespace.values.Example_Group__verbose=True\n',
         '{\n  "Example Group": {\n    "hello": "lordwelch",\n    "verbose": true\n  },\n  "persistent": {\n    "test": false,\n    "hello": "world"\n  }\n}\n',
     ),
     (
@@ -84,7 +84,7 @@ success = [
             'flag': True,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst_test_setting',  # Should almost always be "{group}_{dest}"
+            'internal_name': 'tst__test_setting',  # Should almost always be "{group}_{dest}"
             'metavar': 'TEST_SETTING',  # Set manually so argparse doesn't use TST_TEST
             'nargs': None,
             'required': None,
@@ -95,7 +95,7 @@ success = [
                 'choices': None,
                 'const': None,
                 'default': None,
-                'dest': 'tst_test_setting',
+                'dest': 'tst__test_setting',
                 'help': None,
                 'metavar': 'TEST_SETTING',
                 'nargs': None,
@@ -125,7 +125,7 @@ success = [
             'flag': True,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst_testing',  # Should almost always be "{group}_{dest}"
+            'internal_name': 'tst__testing',  # Should almost always be "{group}_{dest}"
             'metavar': 'TESTING',  # Set manually so argparse doesn't use TST_TEST
             'nargs': None,
             'required': None,
@@ -136,7 +136,7 @@ success = [
                 'choices': None,
                 'const': None,
                 'default': None,
-                'dest': 'tst_testing',
+                'dest': 'tst__testing',
                 'help': None,
                 'metavar': 'TESTING',
                 'nargs': None,
@@ -165,7 +165,7 @@ success = [
             'flag': True,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst_test',  # Should almost always be "{group}_{dest}"
+            'internal_name': 'tst__test',  # Should almost always be "{group}_{dest}"
             'metavar': 'TEST',  # Set manually so argparse doesn't use TST_TEST
             'nargs': None,
             'required': None,
@@ -176,7 +176,7 @@ success = [
                 'choices': None,
                 'const': None,
                 'default': None,
-                'dest': 'tst_test',
+                'dest': 'tst__test',
                 'help': None,
                 'metavar': 'TEST',
                 'nargs': None,
@@ -206,7 +206,7 @@ success = [
             'flag': True,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst_test',  # Should almost always be "{group}_{dest}"
+            'internal_name': 'tst__test',  # Should almost always be "{group}_{dest}"
             'metavar': None,  # store_true does not get a metavar
             'nargs': None,
             'required': None,
@@ -217,7 +217,7 @@ success = [
                 'choices': None,
                 'const': None,
                 'default': None,
-                'dest': 'tst_test',
+                'dest': 'tst__test',
                 'help': None,
                 'metavar': None,
                 'nargs': None,
@@ -246,7 +246,7 @@ success = [
             'flag': True,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst_test',
+            'internal_name': 'tst__test',
             'metavar': 'TEST',
             'nargs': None,
             'required': None,
@@ -257,7 +257,7 @@ success = [
                 'choices': None,
                 'const': None,
                 'default': None,
-                'dest': 'tst_test',
+                'dest': 'tst__test',
                 'help': None,
                 'metavar': 'TEST',
                 'nargs': None,
@@ -286,12 +286,12 @@ success = [
             'flag': False,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst_test',
+            'internal_name': 'tst__test',
             'metavar': 'TEST',
             'nargs': None,
             'required': None,
             'type': None,
-            'argparse_args': ('tst_test',),
+            'argparse_args': ('tst__test',),
             'argparse_kwargs': {
                 'action': None,
                 'choices': None,
