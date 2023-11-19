@@ -81,6 +81,7 @@ success = [
             'display_name': 'test_setting',  # defaults to dest
             'exclusive': False,
             'file': True,
+            'flag': True,
             'group': 'tst',
             'help': None,
             'internal_name': 'tst_test_setting',  # Should almost always be "{group}_{dest}"
@@ -121,6 +122,7 @@ success = [
             'display_name': 'testing',  # defaults to dest
             'exclusive': False,
             'file': True,
+            'flag': True,
             'group': 'tst',
             'help': None,
             'internal_name': 'tst_testing',  # Should almost always be "{group}_{dest}"
@@ -160,6 +162,7 @@ success = [
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
+            'flag': True,
             'group': 'tst',
             'help': None,
             'internal_name': 'tst_test',  # Should almost always be "{group}_{dest}"
@@ -200,6 +203,7 @@ success = [
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
+            'flag': True,
             'group': 'tst',
             'help': None,
             'internal_name': 'tst_test',  # Should almost always be "{group}_{dest}"
@@ -239,6 +243,7 @@ success = [
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
+            'flag': True,
             'group': 'tst',
             'help': None,
             'internal_name': 'tst_test',
@@ -278,6 +283,7 @@ success = [
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
+            'flag': False,
             'group': 'tst',
             'help': None,
             'internal_name': 'tst_test',
@@ -315,6 +321,7 @@ success = [
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
             'file': True,
+            'flag': True,
             'group': '',
             'help': None,
             'internal_name': 'test',  # No group, leading _ is stripped

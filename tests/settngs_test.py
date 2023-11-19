@@ -6,6 +6,7 @@ import json
 import pathlib
 import sys
 from collections import defaultdict
+from textwrap import dedent
 from typing import Generator
 
 import pytest
@@ -61,6 +62,71 @@ def test_setting_failure(arguments, exception):
 
 def test_add_setting(settngs_manager):
     assert settngs_manager.add_setting('--test') is None
+
+
+def test_add_setting_invalid_name(settngs_manager):
+    with pytest.raises(Exception, match='Cannot use test¥ in a namespace'):
+        assert settngs_manager.add_setting('--test¥') is None
+
+
+def test_sub_group(settngs_manager):
+    with pytest.raises(Exception, match='Sub groups are not allowed'):
+        settngs_manager.add_group('tst', lambda parser: parser.add_group('tst', lambda parser: parser.add_setting('--test2', default='hello')))
+
+
+def test_sub_persistent_group(settngs_manager):
+    with pytest.raises(Exception, match='Sub groups are not allowed'):
+        settngs_manager.add_persistent_group('tst', lambda parser: parser.add_persistent_group('tst', lambda parser: parser.add_setting('--test2', default='hello')))
+
+
+def test_redefine_persistent_group(settngs_manager):
+    settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test2', default='hello'))
+    with pytest.raises(Exception, match='Group already exists and is not persistent'):
+        settngs_manager.add_persistent_group('tst', None)
+
+
+def test_exclusive_group(settngs_manager):
+    settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'), exclusive_group=True)
+    settngs_manager.create_argparser()
+    args = settngs_manager.argparser.parse_args(['--test', 'never'])
+    assert args.tst_test == 'never'
+
+    with pytest.raises(SystemExit):
+        settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test2', default='hello'), exclusive_group=True)
+        settngs_manager.create_argparser()
+        args = settngs_manager.argparser.parse_args(['--test', 'never', '--test2', 'never'])
+
+
+def test_files_group(capsys, settngs_manager):
+    settngs_manager.add_group('runtime', lambda parser: parser.add_setting('test', default='hello', nargs='*'))
+    settngs_manager.create_argparser()
+    settngs_manager.argparser.print_help()
+    captured = capsys.readouterr()
+    assert captured.out == dedent('''\
+        usage: __main__.py [-h] [TEST [TEST ...]]
+
+        positional arguments:
+          TEST
+
+        optional arguments:
+          -h, --help  show this help message and exit
+    ''')
+
+
+def test_setting_without_group(capsys, settngs_manager):
+    settngs_manager.add_setting('test', default='hello', nargs='*')
+    settngs_manager.create_argparser()
+    settngs_manager.argparser.print_help()
+    captured = capsys.readouterr()
+    assert captured.out == dedent('''\
+        usage: __main__.py [-h] [TEST [TEST ...]]
+
+        positional arguments:
+          TEST
+
+        optional arguments:
+          -h, --help  show this help message and exit
+    ''')
 
 
 class TestValues:
@@ -533,6 +599,7 @@ settings = (
     (lambda parser: parser.add_setting('-t', '--test', action='help'), None),
     (lambda parser: parser.add_setting('-t', '--test', action='version'), None),
     (lambda parser: parser.add_setting('-t', '--test', type=int), 'int'),
+    (lambda parser: parser.add_setting('-t', '--test', nargs='+'), List[str]),
     (lambda parser: parser.add_setting('-t', '--test', type=_typed_function), 'tests.settngs_test.test_type'),
     (lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=1), 'int'),
     (lambda parser: parser.add_setting('-t', '--test', type=_untyped_function), 'typing.Any'),
@@ -543,16 +610,21 @@ settings = (
 def test_generate_ns(settngs_manager, set_options, typ):
     settngs_manager.add_group('test', set_options)
 
-    src = '''\
-from __future__ import annotations
-import typing
-import settngs
-'''
+    src = dedent('''\
+    from __future__ import annotations
+
+    import settngs
+    ''')
+
+    if 'typing.' in str(typ):
+        src += '\nimport typing'
     if typ == 'tests.settngs_test.test_type':
-        src += 'import tests.settngs_test\n'
-    src += '''
-class settngs_namespace(settngs.TypedNS):
-'''
+        src += '\nimport tests.settngs_test'
+    src += dedent('''
+
+
+    class settngs_namespace(settngs.TypedNS):
+    ''')
     if typ is None:
         src += '    ...\n'
     else:

@@ -14,7 +14,6 @@ from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import Generic
-from typing import Literal
 from typing import NoReturn
 from typing import TYPE_CHECKING
 from typing import TypeVar
@@ -133,7 +132,7 @@ class Setting:
             raise ValueError('names must be specified')
         # We prefix the destination name used by argparse so that there are no conflicts
         # Argument names will still cause an exception if there is a conflict e.g. if '-f' is defined twice
-        self.internal_name, dest, flag = self.get_dest(group, names, dest)
+        self.internal_name, dest, self.flag = self.get_dest(group, names, dest)
         args: Sequence[str] = names
 
         # We then also set the metavar so that '--config' in the group runtime shows as 'CONFIG' instead of 'RUNTIME_CONFIG'
@@ -142,7 +141,7 @@ class Setting:
 
         # If we are not a flag, no '--' or '-' in front
         # we use internal_name as argparse sets dest to args[0]
-        if not flag:
+        if not self.flag:
             args = tuple((self.internal_name, *names[1:]))
 
         self.action = action
@@ -172,7 +171,7 @@ class Setting:
             'required': required,
             'help': help,
             'metavar': metavar,
-            'dest': self.internal_name if flag else None,
+            'dest': self.internal_name if self.flag else None,
         }
 
     def __str__(self) -> str:  # pragma: no cover
@@ -186,7 +185,7 @@ class Setting:
             return NotImplemented
         return self.__dict__ == other.__dict__
 
-    def _guess_type(self) -> type | Literal['Any'] | None:
+    def _guess_type(self) -> type | str | None:
         if self.type is None and self.action is None:
             if self.cmdline:
                 if self.nargs in ('+', '*') or isinstance(self.nargs, int) and self.nargs > 1:
@@ -202,8 +201,9 @@ class Setting:
 
         if self.type is not None:
             type_hints = typing.get_type_hints(self.type)
-            if 'return' in type_hints and isinstance(type_hints['return'], type):
-                return type_hints['return']
+            if 'return' in type_hints:
+                t: type | str = type_hints['return']
+                return t
             if self.default is not None:
                 return type(self.default)
             return 'Any'
@@ -284,36 +284,58 @@ if TYPE_CHECKING:
 
 
 def generate_ns(definitions: Definitions) -> str:
-    imports = ['from __future__ import annotations', 'import typing', 'import settngs']
-    ns = 'class settngs_namespace(settngs.TypedNS):\n'
-    types = []
-    for group_name, group in definitions.items():
-        for setting_name, setting in group.v.items():
+    initial_imports = ['from __future__ import annotations', '', 'import settngs', '']
+    imports: Sequence[str] | set[str]
+    imports = set()
+
+    attributes = []
+    for group in definitions.values():
+        for setting in group.v.values():
             t = setting._guess_type()
             if t is None:
                 continue
+            # Default to any
             type_name = 'Any'
+
+            # Take a string as is
             if isinstance(t, str):
                 type_name = t
+            # Handle generic aliases eg dict[str, str] instead of dict
             elif isinstance(t, types_GenericAlias):
                 type_name = str(t)
+            # Handle standard type objects
             elif isinstance(t, type):
                 type_name = t.__name__
+                # Builtin types don't need an import
                 if t.__module__ != 'builtins':
-                    imports.append(f'import {t.__module__}')
+                    imports.add(f'import {t.__module__}')
+                    # Use the full imported name
                     type_name = t.__module__ + '.' + type_name
+
+            # Expand Any to typing.Any
             if type_name == 'Any':
                 type_name = 'typing.Any'
 
-            types.append(f'    {setting.internal_name}: {type_name}')
-        if types and types[-1] != '':
-            types.append('')
+            attributes.append(f'    {setting.internal_name}: {type_name}')
+        # Add a blank line between groups
+        if attributes and attributes[-1] != '':
+            attributes.append('')
 
-    if not types or all(x == '' for x in types):
+    ns = 'class settngs_namespace(settngs.TypedNS):\n'
+    # Add a '...' expression if there are no attributes
+    if not attributes or all(x == '' for x in attributes):
         ns += '    ...\n'
-        types = ['']
+        attributes = ['']
 
-    return '\n'.join(imports) + '\n\n' + ns + '\n'.join(types)
+    # Add the tying import before extra imports
+    if 'typing.' in '\n'.join(attributes):
+        initial_imports.append('import typing')
+
+    # Remove the possible duplicate typing import
+    imports = sorted(list(imports - {'import typing'}))
+
+    # Merge the imports the ns class definition and the attributes
+    return '\n'.join(initial_imports + imports) + '\n\n\n' + ns + '\n'.join(attributes)
 
 
 def sanitize_name(name: str) -> str:
@@ -558,8 +580,11 @@ def create_argparser(definitions: Definitions, description: str, epilog: str) ->
                         else:
                             groups[setting.group] = argparser.add_argument_group(setting.group)
 
-                    # hard coded exception for files
-                    if not (setting.group == 'runtime' and setting.nargs == '*'):
+                    # Hard coded exception for positional arguments
+                    # Ensures that the option shows at the top of the help output
+                    if 'runtime' in setting.group.casefold() and setting.nargs == '*' and not setting.flag:
+                        current_group = argparser
+                    else:
                         current_group = groups[setting.group]
                 current_group.add_argument(*argparse_args, **argparse_kwargs)
     return argparser
@@ -643,6 +668,11 @@ class Manager:
         self.exclusive_group = False
         self.current_group_name = ''
 
+    def _get_config(self, c: T | Config[T]) -> Config[T]:
+        if not isinstance(c, Config):
+            return Config(c, self.definitions)
+        return c
+
     def generate_ns(self) -> str:
         return generate_ns(self.definitions)
 
@@ -651,6 +681,7 @@ class Manager:
 
     def add_setting(self, *args: Any, **kwargs: Any) -> None:
         """Passes all arguments through to `Setting`, `group` and `exclusive` are already set"""
+
         setting = Setting(*args, **kwargs, group=self.current_group_name, exclusive=self.exclusive_group)
         self.definitions[self.current_group_name].v[setting.dest] = setting
 
@@ -663,6 +694,7 @@ class Manager:
             group: A function that registers individual options using :meth:`add_setting`
             exclusive_group: If this group is an argparse exclusive group
         """
+
         if self.current_group_name != '':
             raise ValueError('Sub groups are not allowed')
         self.current_group_name = name
@@ -681,6 +713,7 @@ class Manager:
             group: A function that registers individual options using :meth:`add_setting`
             exclusive_group: If this group is an argparse exclusive group
         """
+
         if self.current_group_name != '':
             raise ValueError('Sub groups are not allowed')
         self.current_group_name = name
@@ -713,9 +746,7 @@ class Manager:
             cmdline: Include cmdline options
         """
 
-        if not isinstance(config, Config):
-            config = Config(config, self.definitions)
-        return clean_config(config, file=file, cmdline=cmdline)
+        return clean_config(self._get_config(config), file=file, cmdline=cmdline)
 
     def normalize_config(
         self,
@@ -738,10 +769,8 @@ class Manager:
             persistent: Include unknown keys in persistent groups
         """
 
-        if not isinstance(config, Config):
-            config = Config(config, self.definitions)
         return normalize_config(
-            config=config,
+            config=self._get_config(config),
             file=file,
             cmdline=cmdline,
             default=default,
@@ -769,11 +798,9 @@ class Manager:
             persistent: Include unknown keys in persistent groups
         """
 
-        if isinstance(config, Config):
-            self.definitions = config[1]
-        else:
-            config = Config(config, self.definitions)
-        return get_namespace(config, file=file, cmdline=cmdline, default=default, persistent=persistent)
+        return get_namespace(
+            self._get_config(config), file=file, cmdline=cmdline, default=default, persistent=persistent,
+        )
 
     def parse_file(self, filename: pathlib.Path) -> tuple[Config[Values], bool]:
         """
@@ -784,6 +811,7 @@ class Manager:
         Args:
             filename: A pathlib.Path object to read a JSON dictionary from
         """
+
         return parse_file(filename=filename, definitions=self.definitions)
 
     def save_file(self, config: T | Config[T], filename: pathlib.Path) -> bool:
@@ -796,9 +824,8 @@ class Manager:
             config: The options to save to a json dictionary
             filename: A pathlib.Path object to save the json dictionary to
         """
-        if not isinstance(config, Config):
-            config = Config(config, self.definitions)
-        return save_file(config, filename=filename)
+
+        return save_file(self._get_config(config), filename=filename)
 
     def parse_cmdline(self, args: list[str] | None = None, config: ns[T] = None) -> Config[Values]:
         """
@@ -891,7 +918,7 @@ def _main(args: list[str] | None = None) -> None:
     if merged_namespace.values.Example_Group_save:
         if manager.save_file(merged_config, settings_path):
             print(f'Successfully saved settings to {settings_path}')  # noqa: T201
-        else:
+        else:  # pragma: no cover
             print(f'Failed saving settings to a {settings_path}')  # noqa: T201
     if merged_namespace.values.Example_Group_verbose:
         print(f'{merged_namespace.values.Example_Group_verbose=}')  # noqa: T201
