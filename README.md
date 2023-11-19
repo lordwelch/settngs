@@ -64,7 +64,7 @@ Hello world
 settngs.json at the end:
 ```json
 {
-  "example": {
+  "Example Group": {
     "hello": "world",
     "verbose": false
   },
