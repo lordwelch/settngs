@@ -20,8 +20,38 @@ from testing.settngs import success
 
 if sys.version_info < (3, 9):  # pragma: no cover
     from typing import List
+    help_output = '''\
+usage: __main__.py [-h] [TEST [TEST ...]]
+
+positional arguments:
+  TEST
+
+optional arguments:
+  -h, --help  show this help message and exit
+'''
+
 else:  # pragma: no cover
     List = list
+    help_output = '''\
+usage: __main__.py [-h] [TEST ...]
+
+positional arguments:
+  TEST
+
+optional arguments:
+  -h, --help  show this help message and exit
+'''
+
+if sys.version_info >= (3, 10):  # pragma: no cover
+    help_output = '''\
+usage: __main__.py [-h] [TEST ...]
+
+positional arguments:
+  TEST
+
+options:
+  -h, --help  show this help message and exit
+'''
 
 
 @pytest.fixture
@@ -102,15 +132,7 @@ def test_files_group(capsys, settngs_manager):
     settngs_manager.create_argparser()
     settngs_manager.argparser.print_help()
     captured = capsys.readouterr()
-    assert captured.out == dedent('''\
-        usage: __main__.py [-h] [TEST [TEST ...]]
-
-        positional arguments:
-          TEST
-
-        optional arguments:
-          -h, --help  show this help message and exit
-    ''')
+    assert captured.out == help_output
 
 
 def test_setting_without_group(capsys, settngs_manager):
@@ -118,15 +140,7 @@ def test_setting_without_group(capsys, settngs_manager):
     settngs_manager.create_argparser()
     settngs_manager.argparser.print_help()
     captured = capsys.readouterr()
-    assert captured.out == dedent('''\
-        usage: __main__.py [-h] [TEST [TEST ...]]
-
-        positional arguments:
-          TEST
-
-        optional arguments:
-          -h, --help  show this help message and exit
-    ''')
+    assert captured.out == help_output
 
 
 class TestValues:
