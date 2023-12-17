@@ -107,6 +107,9 @@ class Setting:
         exclusive: bool = False,
     ):
         """
+        Attributes:
+        setting_name:     This is the name used to retrieve this Setting object from a `Config` Definitions dictionary.
+                          This only differs from dest when a custom dest is given
 
         Args:
             *names:       Passed directly to argparse
@@ -119,7 +122,8 @@ class Setting:
             required:     Passed directly to argparse
             help:         Passed directly to argparse
             metavar:      Passed directly to argparse, defaults to `dest` upper-cased
-            dest:         This is the name used to retrieve the value from a `Config` object as a dictionary
+            dest:         This is the name used to retrieve the value from a `Config` object as a dictionary.
+                          Default to `setting_name`.
             display_name: This is not used by settngs. This is a human-readable name to be used when generating a GUI.
                           Defaults to `dest`.
             cmdline:      If this setting can be set via the commandline
@@ -133,7 +137,7 @@ class Setting:
             raise ValueError('names must be specified')
         # We prefix the destination name used by argparse so that there are no conflicts
         # Argument names will still cause an exception if there is a conflict e.g. if '-f' is defined twice
-        self.internal_name, dest, self.flag = self.get_dest(group, names, dest)
+        self.internal_name, setting_name, dest, self.flag = self.get_dest(group, names, dest)
         args: Sequence[str] = names
 
         # We then also set the metavar so that '--config' in the group runtime shows as 'CONFIG' instead of 'RUNTIME_CONFIG'
@@ -155,6 +159,7 @@ class Setting:
         self.help = help
         self.metavar = metavar
         self.dest = dest
+        self.setting_name = setting_name
         self.cmdline = cmdline
         self.file = file
         self.argparse_args = args
@@ -228,28 +233,30 @@ class Setting:
             return None
         return 'Any'
 
-    def get_dest(self, prefix: str, names: Sequence[str], dest: str | None) -> tuple[str, str, bool]:
-        dest_name = None
+    def get_dest(self, prefix: str, names: Sequence[str], dest: str | None) -> tuple[str, str, str, bool]:
+        setting_name = None
         flag = False
 
         prefix = sanitize_name(prefix)
         for n in names:
             if n.startswith('--'):
                 flag = True
-                dest_name = sanitize_name(n)
+                setting_name = sanitize_name(n)
                 break
             if n.startswith('-'):
                 flag = True
 
-        if dest_name is None:
-            dest_name = names[0]
+        if setting_name is None:
+            setting_name = names[0]
         if dest:
             dest_name = dest
+        else:
+            dest_name = setting_name
         if not dest_name.isidentifier():
             raise Exception(f'Cannot use {dest_name} in a namespace')
 
         internal_name = f'{prefix}__{dest_name}'.lstrip('_')
-        return internal_name, dest_name, flag
+        return internal_name, setting_name, dest_name, flag
 
     def filter_argparse_kwargs(self) -> dict[str, Any]:
         return {k: v for k, v in self.argparse_kwargs.items() if v is not None}
@@ -708,7 +715,7 @@ class Manager:
         """Passes all arguments through to `Setting`, `group` and `exclusive` are already set"""
 
         setting = Setting(*args, **kwargs, group=self.current_group_name, exclusive=self.exclusive_group)
-        self.definitions[self.current_group_name].v[setting.dest] = setting
+        self.definitions[self.current_group_name].v[setting.setting_name] = setting
 
     def add_group(self, name: str, group: Callable[[Manager], None], exclusive_group: bool = False) -> None:
         """

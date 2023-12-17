@@ -77,6 +77,7 @@ success = [
             'cmdline': True,
             'const': None,
             'default': None,
+            'setting_name': 'test_setting',  # dest is calculated by Setting and is not used by argparse
             'dest': 'test_setting',  # dest is calculated by Setting and is not used by argparse
             'display_name': 'test_setting',  # defaults to dest
             'exclusive': False,
@@ -84,7 +85,7 @@ success = [
             'flag': True,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst__test_setting',  # Should almost always be "{group}_{dest}"
+            'internal_name': 'tst__test_setting',  # Should almost always be "{group}__{dest}"
             'metavar': 'TEST_SETTING',  # Set manually so argparse doesn't use TST_TEST
             'nargs': None,
             'required': None,
@@ -118,6 +119,7 @@ success = [
             'cmdline': True,
             'const': None,
             'default': None,
+            'setting_name': 'test',  # setting_name is calculated by Setting and is not used by argparse
             'dest': 'testing',  # dest is calculated by Setting and is not used by argparse
             'display_name': 'testing',  # defaults to dest
             'exclusive': False,
@@ -125,7 +127,7 @@ success = [
             'flag': True,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst__testing',  # Should almost always be "{group}_{dest}"
+            'internal_name': 'tst__testing',  # Should almost always be "{group}__{dest}"
             'metavar': 'TESTING',  # Set manually so argparse doesn't use TST_TEST
             'nargs': None,
             'required': None,
@@ -158,6 +160,7 @@ success = [
             'cmdline': True,
             'const': None,
             'default': None,
+            'setting_name': 'test',  # dest is calculated by Setting and is not used by argparse
             'dest': 'test',  # dest is calculated by Setting and is not used by argparse
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
@@ -165,7 +168,7 @@ success = [
             'flag': True,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst__test',  # Should almost always be "{group}_{dest}"
+            'internal_name': 'tst__test',  # Should almost always be "{group}__{dest}"
             'metavar': 'TEST',  # Set manually so argparse doesn't use TST_TEST
             'nargs': None,
             'required': None,
@@ -199,6 +202,7 @@ success = [
             'cmdline': True,
             'const': None,
             'default': None,
+            'setting_name': 'test',  # dest is calculated by Setting and is not used by argparse
             'dest': 'test',  # dest is calculated by Setting and is not used by argparse
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
@@ -206,7 +210,7 @@ success = [
             'flag': True,
             'group': 'tst',
             'help': None,
-            'internal_name': 'tst__test',  # Should almost always be "{group}_{dest}"
+            'internal_name': 'tst__test',  # Should almost always be "{group}__{dest}"
             'metavar': None,  # store_true does not get a metavar
             'nargs': None,
             'required': None,
@@ -239,6 +243,7 @@ success = [
             'cmdline': True,
             'const': None,
             'default': None,
+            'setting_name': 'test',
             'dest': 'test',
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
@@ -279,6 +284,7 @@ success = [
             'cmdline': True,
             'const': None,
             'default': None,
+            'setting_name': 'test',
             'dest': 'test',
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
@@ -317,6 +323,7 @@ success = [
             'cmdline': True,
             'const': None,
             'default': None,
+            'setting_name': 'test',
             'dest': 'test',
             'display_name': 'test',  # defaults to dest
             'exclusive': False,
