@@ -324,7 +324,9 @@ def generate_ns(definitions: Definitions) -> str:
             if type_name == 'Any':
                 type_name = 'typing.Any'
 
-            attributes.append(f'    {setting.internal_name}: {type_name}')
+            attribute = f'    {setting.internal_name}: {type_name}'
+            if attribute not in attributes:
+                attributes.append(attribute)
         # Add a blank line between groups
         if attributes and attributes[-1] != '':
             attributes.append('')
