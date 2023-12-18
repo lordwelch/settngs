@@ -448,13 +448,13 @@ def normalize_config(
                 value, is_default = get_option(options, setting)
                 if not is_default or default:
                     # User has set a custom value or has requested the default value
-                    group_options[setting_name] = value
-                elif setting_name in group_options:
+                    group_options[setting.dest] = value
+                elif setting.dest in group_options:
                     # default values have been requested to be removed
-                    del group_options[setting_name]
-            elif setting_name in group_options:
+                    del group_options[setting.dest]
+            elif setting.dest in group_options:
                 # Setting type (file or cmdline) has not been requested and should be removed for persistent groups
-                del group_options[setting_name]
+                del group_options[setting.dest]
         normalized[group_name] = group_options
 
     return Config(normalized, config.definitions)

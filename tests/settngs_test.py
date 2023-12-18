@@ -18,7 +18,18 @@ from testing.settngs import failure
 from testing.settngs import success
 
 
-if sys.version_info < (3, 9):  # pragma: no cover
+if sys.version_info >= (3, 10):  # pragma: no cover
+    List = list
+    help_output = '''\
+usage: __main__.py [-h] [TEST ...]
+
+positional arguments:
+  TEST
+
+options:
+  -h, --help  show this help message and exit
+'''
+elif sys.version_info < (3, 9):  # pragma: no cover
     from typing import List
     help_output = '''\
 usage: __main__.py [-h] [TEST [TEST ...]]
@@ -39,17 +50,6 @@ positional arguments:
   TEST
 
 optional arguments:
-  -h, --help  show this help message and exit
-'''
-
-if sys.version_info >= (3, 10):  # pragma: no cover
-    help_output = '''\
-usage: __main__.py [-h] [TEST ...]
-
-positional arguments:
-  TEST
-
-options:
   -h, --help  show this help message and exit
 '''
 
@@ -210,6 +210,24 @@ class TestValues:
         assert non_defaults_normalized.values['tst'] == {'test': 'world'}
         assert non_defaults_normalized.values['tst_persistent'] == {'test': 'world'}
 
+    def test_normalize_dest(self, settngs_manager):
+        settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
+        settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test2', dest='test', default='hello'))
+        settngs_manager.add_persistent_group('tst_persistent', lambda parser: parser.add_setting('--test', default='hello'))
+
+        defaults = settngs_manager.defaults()
+        defaults_normalized = settngs_manager.normalize_config(defaults, file=True, default=False)
+        assert defaults_normalized.values['tst'] == {}
+        assert defaults_normalized.values['tst_persistent'] == {}
+
+        non_defaults = settngs_manager.defaults()
+        non_defaults.values['tst']['test'] = 'world'
+        non_defaults.values['tst_persistent']['test'] = 'world'
+        non_defaults_normalized = settngs_manager.normalize_config(non_defaults, file=True, default=False)
+
+        assert non_defaults_normalized.values['tst'] == {'test': 'world'}
+        assert non_defaults_normalized.values['tst_persistent'] == {'test': 'world'}
+
     def test_normalize(self, settngs_manager):
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
         settngs_manager.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
@@ -317,6 +335,23 @@ class TestNamespace:
         assert non_defaults_normalized.values.tst__test == 'world'
         assert non_defaults_normalized.values.tst_persistent__test == 'world'
 
+    def test_normalize_dest(self, settngs_manager):
+        settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
+        settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test2', dest='test', default='hello'))
+        settngs_manager.add_persistent_group('tst_persistent', lambda parser: parser.add_setting('--test', default='hello'))
+
+        defaults = settngs_manager.defaults()
+        defaults_normalized = settngs_manager.get_namespace(settngs_manager.normalize_config(defaults, file=True, default=False), file=True, default=False)
+        assert defaults_normalized.values.__dict__ == {}
+
+        non_defaults = settngs_manager.get_namespace(settngs_manager.defaults(), file=True, cmdline=True)
+        non_defaults.values.tst__test = 'world'
+        non_defaults.values.tst_persistent__test = 'world'
+        non_defaults_normalized = settngs_manager.get_namespace(settngs_manager.normalize_config(non_defaults, file=True, default=False), file=True, default=False)
+
+        assert non_defaults_normalized.values.tst__test == 'world'
+        assert non_defaults_normalized.values.tst_persistent__test == 'world'
+
     def test_normalize(self, settngs_manager):
         settngs_manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
         settngs_manager.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
@@ -333,7 +368,7 @@ class TestNamespace:
         assert normalized.persistent__hello == 'success'
         assert normalized.persistent__world == 'world'
 
-    def test_normalize_unknown(self, settngs_manager):
+    def test_normalize_unknown_group(self, settngs_manager):
         manager = settngs.Manager()
         manager.add_group('tst', lambda parser: parser.add_setting('--test', default='hello'))
         manager.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
