@@ -13,6 +13,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any
 from typing import Callable
+from typing import cast
 from typing import Dict
 from typing import Generic
 from typing import NoReturn
@@ -82,6 +83,20 @@ else:  # pragma: no cover
     from types import GenericAlias as types_GenericAlias
     from argparse import BooleanOptionalAction
     removeprefix = str.removeprefix
+
+
+def _isnamedtupleinstance(x: Any) -> bool:
+    t = type(x)
+    b = t.__bases__
+
+    if len(b) != 1 or b[0] != tuple:
+        return False
+
+    f = getattr(t, '_fields', None)
+    if not isinstance(f, tuple):
+        return False
+
+    return all(isinstance(n, str) for n in f)
 
 
 class Setting:
@@ -199,6 +214,11 @@ class Setting:
                 return str
             else:
                 if not self.cmdline and self.default is not None:
+                    if not isinstance(self.default, str) and not _isnamedtupleinstance(self.default) and isinstance(self.default, Sequence) and self.default and self.default[0]:
+                        try:
+                            return cast(type, type(self.default)[type(self.default[0])])
+                        except Exception:
+                            ...
                     return type(self.default)
                 return 'Any'
 
@@ -211,6 +231,11 @@ class Setting:
                 t: type | str = type_hints['return']
                 return t
             if self.default is not None:
+                if not isinstance(self.default, str) and not _isnamedtupleinstance(self.default) and isinstance(self.default, Sequence) and self.default and self.default[0]:
+                    try:
+                        return cast(type, type(self.default)[type(self.default[0])])
+                    except Exception:
+                        ...
                 return type(self.default)
             return 'Any'
 
