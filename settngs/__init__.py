@@ -316,8 +316,8 @@ if TYPE_CHECKING:
     ns = Namespace | TypedNS | Config[T] | None
 
 
-def generate_ns(definitions: Definitions) -> str:
-    initial_imports = ['from __future__ import annotations', '', 'import settngs', '']
+def generate_ns(definitions: Definitions) -> tuple[str, str]:
+    initial_imports = ['from __future__ import annotations', '', 'import settngs']
     imports: Sequence[str] | set[str]
     imports = set()
 
@@ -356,7 +356,7 @@ def generate_ns(definitions: Definitions) -> str:
         if attributes and attributes[-1] != '':
             attributes.append('')
 
-    ns = 'class settngs_namespace(settngs.TypedNS):\n'
+    ns = 'class SettngsNS(settngs.TypedNS):\n'
     # Add a '...' expression if there are no attributes
     if not attributes or all(x == '' for x in attributes):
         ns += '    ...\n'
@@ -370,7 +370,69 @@ def generate_ns(definitions: Definitions) -> str:
     imports = sorted(list(imports - {'import typing'}))
 
     # Merge the imports the ns class definition and the attributes
-    return '\n'.join(initial_imports + imports) + '\n\n\n' + ns + '\n'.join(attributes)
+    return '\n'.join(initial_imports + imports), ns + '\n'.join(attributes)
+
+
+def generate_dict(definitions: Definitions) -> tuple[str, str]:
+    initial_imports = ['from __future__ import annotations', '', 'import typing']
+    imports: Sequence[str] | set[str]
+    imports = set()
+
+    groups_are_identifiers = all(n.isidentifier() for n in definitions.keys())
+    classes = []
+    for group_name, group in definitions.items():
+        attributes = []
+        for setting in group.v.values():
+            t = setting._guess_type()
+            if t is None:
+                continue
+            # Default to any
+            type_name = 'Any'
+
+            # Take a string as is
+            if isinstance(t, str):
+                type_name = t
+            # Handle generic aliases eg dict[str, str] instead of dict
+            elif isinstance(t, types_GenericAlias):
+                type_name = str(t)
+            # Handle standard type objects
+            elif isinstance(t, type):
+                type_name = t.__name__
+                # Builtin types don't need an import
+                if t.__module__ != 'builtins':
+                    imports.add(f'import {t.__module__}')
+                    # Use the full imported name
+                    type_name = t.__module__ + '.' + type_name
+
+            # Expand Any to typing.Any
+            if type_name == 'Any':
+                type_name = 'typing.Any'
+
+            attribute = f'    {setting.dest}: {type_name}'
+            if attribute not in attributes:
+                attributes.append(attribute)
+        if not attributes or all(x == '' for x in attributes):
+            attributes = ['    ...']
+        classes.append(
+            f'class {sanitize_name(group_name)}(typing.TypedDict):\n'
+            + '\n'.join(attributes) + '\n\n',
+        )
+
+    # Remove the possible duplicate typing import
+    imports = sorted(list(imports - {'import typing'}))
+
+    if groups_are_identifiers:
+        ns = '\nclass SettngsDict(typing.TypedDict):\n'
+        ns += '\n'.join(f'    {n}: {sanitize_name(n)}' for n in definitions.keys())
+    else:
+        ns = '\nSettngsDict = typing.TypedDict(\n'
+        ns += "    'SettngsDict', {\n"
+        for n in definitions.keys():
+            ns += f'        {n!r}: {sanitize_name(n)},\n'
+        ns += '    },\n'
+        ns += ')\n'
+    # Merge the imports the ns class definition and the attributes
+    return '\n'.join(initial_imports + imports), '\n'.join(classes) + ns + '\n'
 
 
 def sanitize_name(name: str) -> str:
@@ -732,8 +794,11 @@ class Manager:
             return Config(c, self.definitions)
         return c
 
-    def generate_ns(self) -> str:
+    def generate_ns(self) -> tuple[str, str]:
         return generate_ns(self.definitions)
+
+    def generate_dict(self) -> tuple[str, str]:
+        return generate_dict(self.definitions)
 
     def create_argparser(self) -> None:
         self.argparser = create_argparser(self.definitions, self.description, self.epilog)
