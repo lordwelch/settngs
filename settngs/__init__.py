@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import copy
+import inspect
 import json
 import logging
 import pathlib
 import re
 import sys
 import typing
+import warnings
 from argparse import Namespace
 from collections import defaultdict
 from collections.abc import Sequence
@@ -152,12 +154,13 @@ class Setting:
             raise ValueError('names must be specified')
         # We prefix the destination name used by argparse so that there are no conflicts
         # Argument names will still cause an exception if there is a conflict e.g. if '-f' is defined twice
-        self.internal_name, setting_name, dest, self.flag = self.get_dest(group, names, dest)
+        self.internal_name, self.setting_name, dest, self.flag = self.get_dest(group, names, dest)
         args: Sequence[str] = names
 
         # We then also set the metavar so that '--config' in the group runtime shows as 'CONFIG' instead of 'RUNTIME_CONFIG'
-        if not metavar and action not in ('store_true', 'store_false', 'count'):
-            metavar = dest.upper()
+        if not metavar and action not in ('store_true', 'store_false', 'count', 'help', 'version'):
+            if not callable(action) or 'metavar' in inspect.signature(action).parameters.keys():
+                metavar = dest.upper()
 
         # If we are not a flag, no '--' or '-' in front
         # we use internal_name as argparse sets dest to args[0]
@@ -174,7 +177,6 @@ class Setting:
         self.help = help
         self.metavar = metavar
         self.dest = dest
-        self.setting_name = setting_name
         self.cmdline = cmdline
         self.file = file
         self.argparse_args = args
@@ -686,26 +688,35 @@ def create_argparser(definitions: Definitions, description: str, epilog: str) ->
     argparser = argparse.ArgumentParser(
         description=description, epilog=epilog, formatter_class=argparse.RawTextHelpFormatter,
     )
-    for group in definitions.values():
-        for setting in group.v.values():
-            if setting.cmdline:
-                argparse_args, argparse_kwargs = setting.to_argparse()
-                current_group: ArgParser = argparser
-                if setting.group:
-                    if setting.group not in groups:
-                        if setting.exclusive:
-                            groups[setting.group] = argparser.add_argument_group(
-                                setting.group,
-                            ).add_mutually_exclusive_group()
-                        else:
-                            groups[setting.group] = argparser.add_argument_group(setting.group)
 
-                    # Hard coded exception for positional arguments
-                    # Ensures that the option shows at the top of the help output
-                    if 'runtime' in setting.group.casefold() and setting.nargs == '*' and not setting.flag:
-                        current_group = argparser
-                    else:
-                        current_group = groups[setting.group]
+    def get_current_group(setting: Setting) -> ArgParser:
+
+        if not setting.group:
+            return argparser
+
+        # Hard coded exception for positional arguments
+        # Ensures that the option shows at the top of the help output
+        if 'runtime' in setting.group.casefold() and setting.nargs == '*' and not setting.flag:
+            return argparser
+
+        if setting.group not in groups:
+            if setting.exclusive:
+                groups[setting.group] = argparser.add_argument_group(
+                    setting.group,
+                ).add_mutually_exclusive_group()
+            else:
+                groups[setting.group] = argparser.add_argument_group(setting.group)
+        return groups[setting.group]
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message="'metavar", category=DeprecationWarning, module='argparse')
+
+        for group in definitions.values():
+            for setting in group.v.values():
+                if not setting.cmdline:
+                    continue
+                argparse_args, argparse_kwargs = setting.to_argparse()
+                current_group: ArgParser = get_current_group(setting)
+
                 current_group.add_argument(*argparse_args, **argparse_kwargs)
     return argparser
 
@@ -1013,6 +1024,7 @@ def example_group(manager: Manager) -> None:
     manager.add_setting(
         '--verbose', '-v',
         default=False,
+        metavar='nothing',
         action=BooleanOptionalAction,  # Added in Python 3.9
     )
 
