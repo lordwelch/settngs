@@ -322,6 +322,7 @@ def generate_ns(definitions: Definitions) -> tuple[str, str]:
     imports = set()
 
     attributes = []
+    used_attributes: set[str] = set()
     for group in definitions.values():
         for setting in group.v.values():
             t, noneable = setting._guess_type()
@@ -353,7 +354,8 @@ def generate_ns(definitions: Definitions) -> tuple[str, str]:
                 attribute = f'    {setting.internal_name}: {type_name} | None'
             else:
                 attribute = f'    {setting.internal_name}: {type_name}'
-            if attribute not in attributes:
+            if setting.internal_name not in used_attributes:
+                used_attributes.add(setting.internal_name)
                 attributes.append(attribute)
         # Add a blank line between groups
         if attributes and attributes[-1] != '':
@@ -385,6 +387,7 @@ def generate_dict(definitions: Definitions) -> tuple[str, str]:
     classes = []
     for group_name, group in definitions.items():
         attributes = []
+        used_attributes: set[str] = set()
         for setting in group.v.values():
             t, no_default = setting._guess_type()
             if t is None:
@@ -415,7 +418,8 @@ def generate_dict(definitions: Definitions) -> tuple[str, str]:
                 attribute = f'    {setting.dest}: {type_name} | None'
             else:
                 attribute = f'    {setting.dest}: {type_name}'
-            if attribute not in attributes:
+            if setting.dest not in used_attributes:
+                used_attributes.add(setting.dest)
                 attributes.append(attribute)
         if not attributes or all(x == '' for x in attributes):
             attributes = ['    ...']
