@@ -41,6 +41,11 @@ if sys.version_info < (3, 9):  # pragma: no cover
         else:
             return self[:]
 
+    def get_typing_type(t: type) -> type:
+        if t.__module__ == 'builtins':
+            return getattr(typing, t.__name__.title(), t)
+        return t
+
     class BooleanOptionalAction(argparse.Action):
         def __init__(
             self,
@@ -77,7 +82,7 @@ if sys.version_info < (3, 9):  # pragma: no cover
                 metavar=metavar,
             )
 
-        def __call__(self, parser, namespace, values, option_string=None):  # dead: disable
+        def __call__(self, parser, namespace, values, option_string=None):  # pragma: no cover dead: disable
             if option_string in self.option_strings:
                 setattr(namespace, self.dest, not option_string.startswith('--no-'))
 else:  # pragma: no cover
@@ -86,8 +91,11 @@ else:  # pragma: no cover
     from argparse import BooleanOptionalAction
     removeprefix = str.removeprefix
 
+    def get_typing_type(t: type) -> type:
+        return t
 
-def _isnamedtupleinstance(x: Any) -> bool:
+
+def _isnamedtupleinstance(x: Any) -> bool:  # pragma: no cover
     t = type(x)
     b = t.__bases__
 
@@ -209,58 +217,45 @@ class Setting:
         return self.__dict__ == other.__dict__
 
     def _guess_type(self) -> tuple[type | str | None, bool]:
-        if self.type is None and self.action is None:
-            if self.cmdline:
-                if self.nargs in ('+', '*') or isinstance(self.nargs, int) and self.nargs > 1:
-                    return List[str], self.default is None
-                return str, self.default is None
-            else:
-                if not self.cmdline and self.default is not None:
-                    if not isinstance(self.default, str) and not _isnamedtupleinstance(self.default) and isinstance(self.default, Sequence) and self.default and self.default[0]:
-                        try:
-                            return cast(type, type(self.default)[type(self.default[0])]), self.default is None
-                        except Exception:
-                            ...
-                    return type(self.default), self.default is None
-                return 'Any', self.default is None
-
         if isinstance(self.type, type):
             return self.type, self.default is None
+
+        __action_to_type = {
+            'store_true': (bool, False),
+            'store_false': (bool, False),
+            BooleanOptionalAction: (bool, self.default is None),
+            'store_const': (type(self.const), self.default is None),
+            'count': (int, self.default is None),
+            'append': (List[str], self.default is None),
+            'extend': (List[str], self.default is None),
+            'append_const': (List[type(self.const)], self.default is None),  # type: ignore[misc]
+            'help': (None, self.default is None),
+            'version': (None, self.default is None),
+        }
+
+        if self.action in __action_to_type:
+            return __action_to_type[self.action]
 
         if self.type is not None:
             type_hints = typing.get_type_hints(self.type)
             if 'return' in type_hints:
                 t: type | str = type_hints['return']
                 return t, self.default is None
-            if self.default is not None:
-                if not isinstance(self.default, str) and not _isnamedtupleinstance(self.default) and isinstance(self.default, Sequence) and self.default and self.default[0]:
-                    try:
-                        return cast(type, type(self.default)[type(self.default[0])]), self.default is None
-                    except Exception:
-                        ...
-                return type(self.default), self.default is None
-            return 'Any', self.default is None
 
-        if self.action in ('store_true', 'store_false'):
-            return bool, False
+        if self.default is not None:
+            if not isinstance(self.default, str) and not _isnamedtupleinstance(self.default) and isinstance(self.default, Sequence) and self.default and self.default[0]:
+                try:
+                    t = get_typing_type(type(self.default))
+                    ret = cast(type, t[type(self.default[0])]), self.default is None  # type: ignore[index]
+                    return ret
+                except Exception:
+                    ...
+            return type(self.default), self.default is None
 
-        if self.action == BooleanOptionalAction:
-            return bool, self.default is None
-
-        if self.action in ('store_const',):
-            return type(self.const), self.default is None
-
-        if self.action in ('count',):
-            return int, self.default is None
-
-        if self.action in ('append', 'extend'):
-            return List[str], self.default is None
-
-        if self.action in ('append_const',):
-            return list, self.default is None  # list[type(self.const)]
-
-        if self.action in ('help', 'version'):
-            return None, self.default is None
+        if self.cmdline and self.action is None and self.type is None:
+            if self.nargs in ('+', '*') or isinstance(self.nargs, int) and self.nargs > 1:
+                return List[str], self.default is None
+            return str, self.default is None
         return 'Any', self.default is None
 
     def get_dest(self, prefix: str, names: Sequence[str], dest: str | None) -> tuple[str, str, str, bool]:
@@ -329,7 +324,7 @@ def generate_ns(definitions: Definitions) -> tuple[str, str]:
     attributes = []
     for group in definitions.values():
         for setting in group.v.values():
-            t, no_default = setting._guess_type()
+            t, noneable = setting._guess_type()
             if t is None:
                 continue
             # Default to any
@@ -354,7 +349,7 @@ def generate_ns(definitions: Definitions) -> tuple[str, str]:
             if type_name == 'Any':
                 type_name = 'typing.Any'
 
-            if no_default and type_name not in ('typing.Any', 'None'):
+            if noneable and type_name not in ('typing.Any', 'None'):
                 attribute = f'    {setting.internal_name}: {type_name} | None'
             else:
                 attribute = f'    {setting.internal_name}: {type_name}'
