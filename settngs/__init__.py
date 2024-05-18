@@ -208,57 +208,60 @@ class Setting:
             return NotImplemented
         return self.__dict__ == other.__dict__
 
-    def _guess_type(self) -> type | str | None:
+    def _guess_type(self) -> tuple[type | str | None, bool]:
         if self.type is None and self.action is None:
             if self.cmdline:
                 if self.nargs in ('+', '*') or isinstance(self.nargs, int) and self.nargs > 1:
-                    return List[str]
-                return str
+                    return List[str], self.default is None
+                return str, self.default is None
             else:
                 if not self.cmdline and self.default is not None:
                     if not isinstance(self.default, str) and not _isnamedtupleinstance(self.default) and isinstance(self.default, Sequence) and self.default and self.default[0]:
                         try:
-                            return cast(type, type(self.default)[type(self.default[0])])
+                            return cast(type, type(self.default)[type(self.default[0])]), self.default is None
                         except Exception:
                             ...
-                    return type(self.default)
-                return 'Any'
+                    return type(self.default), self.default is None
+                return 'Any', self.default is None
 
         if isinstance(self.type, type):
-            return self.type
+            return self.type, self.default is None
 
         if self.type is not None:
             type_hints = typing.get_type_hints(self.type)
             if 'return' in type_hints:
                 t: type | str = type_hints['return']
-                return t
+                return t, self.default is None
             if self.default is not None:
                 if not isinstance(self.default, str) and not _isnamedtupleinstance(self.default) and isinstance(self.default, Sequence) and self.default and self.default[0]:
                     try:
-                        return cast(type, type(self.default)[type(self.default[0])])
+                        return cast(type, type(self.default)[type(self.default[0])]), self.default is None
                     except Exception:
                         ...
-                return type(self.default)
-            return 'Any'
+                return type(self.default), self.default is None
+            return 'Any', self.default is None
 
-        if self.action in ('store_true', 'store_false', BooleanOptionalAction):
-            return bool
+        if self.action in ('store_true', 'store_false'):
+            return bool, False
+
+        if self.action == BooleanOptionalAction:
+            return bool, self.default is None
 
         if self.action in ('store_const',):
-            return type(self.const)
+            return type(self.const), self.default is None
 
         if self.action in ('count',):
-            return int
+            return int, self.default is None
 
         if self.action in ('append', 'extend'):
-            return List[str]
+            return List[str], self.default is None
 
         if self.action in ('append_const',):
-            return list  # list[type(self.const)]
+            return list, self.default is None  # list[type(self.const)]
 
         if self.action in ('help', 'version'):
-            return None
-        return 'Any'
+            return None, self.default is None
+        return 'Any', self.default is None
 
     def get_dest(self, prefix: str, names: Sequence[str], dest: str | None) -> tuple[str, str, str, bool]:
         setting_name = None
@@ -326,7 +329,7 @@ def generate_ns(definitions: Definitions) -> tuple[str, str]:
     attributes = []
     for group in definitions.values():
         for setting in group.v.values():
-            t = setting._guess_type()
+            t, no_default = setting._guess_type()
             if t is None:
                 continue
             # Default to any
@@ -351,7 +354,10 @@ def generate_ns(definitions: Definitions) -> tuple[str, str]:
             if type_name == 'Any':
                 type_name = 'typing.Any'
 
-            attribute = f'    {setting.internal_name}: {type_name}'
+            if no_default and type_name not in ('typing.Any', 'None'):
+                attribute = f'    {setting.internal_name}: {type_name} | None'
+            else:
+                attribute = f'    {setting.internal_name}: {type_name}'
             if attribute not in attributes:
                 attributes.append(attribute)
         # Add a blank line between groups
@@ -385,7 +391,7 @@ def generate_dict(definitions: Definitions) -> tuple[str, str]:
     for group_name, group in definitions.items():
         attributes = []
         for setting in group.v.values():
-            t = setting._guess_type()
+            t, no_default = setting._guess_type()
             if t is None:
                 continue
             # Default to any
@@ -410,7 +416,10 @@ def generate_dict(definitions: Definitions) -> tuple[str, str]:
             if type_name == 'Any':
                 type_name = 'typing.Any'
 
-            attribute = f'    {setting.dest}: {type_name}'
+            if no_default and type_name not in ('typing.Any', 'None'):
+                attribute = f'    {setting.dest}: {type_name} | None'
+            else:
+                attribute = f'    {setting.dest}: {type_name}'
             if attribute not in attributes:
                 attributes.append(attribute)
         if not attributes or all(x == '' for x in attributes):
