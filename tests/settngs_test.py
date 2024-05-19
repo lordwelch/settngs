@@ -19,6 +19,7 @@ from testing.settngs import success
 
 if sys.version_info >= (3, 10):  # pragma: no cover
     List = list
+    Set = set
     help_output = '''\
 usage: __main__.py [-h] [TEST ...]
 
@@ -30,6 +31,7 @@ options:
 '''
 elif sys.version_info < (3, 9):  # pragma: no cover
     from typing import List
+    from typing import Set
     help_output = '''\
 usage: __main__.py [-h] [TEST [TEST ...]]
 
@@ -42,6 +44,7 @@ optional arguments:
 
 else:  # pragma: no cover
     List = list
+    Set = set
     help_output = '''\
 usage: __main__.py [-h] [TEST ...]
 
@@ -618,6 +621,18 @@ def _typed_function(something: str) -> test_type:  # pragma: no cover
     return test_type()
 
 
+def _typed_list_generic_function(something: test_type) -> List[test_type]:  # pragma: no cover
+    return [test_type()]
+
+
+def _typed_list_function() -> List:   # type: ignore[type-arg] # pragma: no cover
+    return []
+
+
+def _typed_set_function() -> Set:  # type: ignore[type-arg] # pragma: no cover
+    return set()
+
+
 def _untyped_function(something):
     ...
 
@@ -652,23 +667,34 @@ types = (
     (0, settngs.Setting('-t', '--test'), str, True),
     (1, settngs.Setting('-t', '--test', cmdline=False), 'Any', True),
     (2, settngs.Setting('-t', '--test', default=1, file=True, cmdline=False), int, False),
-    (3, settngs.Setting('-t', '--test', action='count'), int, True),
-    (4, settngs.Setting('-t', '--test', action='append'), List[str], True),
-    (5, settngs.Setting('-t', '--test', action='extend'), List[str], True),
-    (6, settngs.Setting('-t', '--test', nargs='+'), List[str], True),
-    (7, settngs.Setting('-t', '--test', action='store_const', const=1), int, True),
-    (8, settngs.Setting('-t', '--test', action='append_const', const=1), List[int], True),
-    (9, settngs.Setting('-t', '--test', action='store_true'), bool, False),
-    (10, settngs.Setting('-t', '--test', action='store_false'), bool, False),
-    (11, settngs.Setting('-t', '--test', action=settngs.BooleanOptionalAction), bool, True),
-    (12, settngs.Setting('-t', '--test', action=_customAction), 'Any', True),
-    (13, settngs.Setting('-t', '--test', action='help'), None, True),
-    (14, settngs.Setting('-t', '--test', action='version'), None, True),
-    (15, settngs.Setting('-t', '--test', type=int), int, True),
-    (16, settngs.Setting('-t', '--test', type=_typed_function), test_type, True),
-    (17, settngs.Setting('-t', '--test', type=_untyped_function, default=1), int, False),
-    (18, settngs.Setting('-t', '--test', type=_untyped_function, default=[1]), List[int], False),
-    (19, settngs.Setting('-t', '--test', type=_untyped_function), 'Any', True),
+    (3, settngs.Setting('-t', '--test', default='test'), str, False),
+    (4, settngs.Setting('-t', '--test', default='test', file=True, cmdline=False), str, False),
+    (5, settngs.Setting('-t', '--test', action='count'), int, True),
+    (6, settngs.Setting('-t', '--test', action='append'), List[str], True),
+    (7, settngs.Setting('-t', '--test', action='extend'), List[str], True),
+    (8, settngs.Setting('-t', '--test', nargs='+'), List[str], True),
+    (9, settngs.Setting('-t', '--test', action='store_const', const=1), int, True),
+    (10, settngs.Setting('-t', '--test', action='append_const', const=1), List[int], True),
+    (11, settngs.Setting('-t', '--test', action='store_true'), bool, False),
+    (12, settngs.Setting('-t', '--test', action='store_false'), bool, False),
+    (13, settngs.Setting('-t', '--test', action=settngs.BooleanOptionalAction), bool, True),
+    (14, settngs.Setting('-t', '--test', action=_customAction), 'Any', True),
+    (15, settngs.Setting('-t', '--test', action='help'), None, True),
+    (16, settngs.Setting('-t', '--test', action='version'), None, True),
+    (17, settngs.Setting('-t', '--test', type=int), int, True),
+    (18, settngs.Setting('-t', '--test', type=int, nargs='+'), List[int], True),
+    (19, settngs.Setting('-t', '--test', type=_typed_function), test_type, True),
+    (20, settngs.Setting('-t', '--test', type=_untyped_function, default=1), int, False),
+    (21, settngs.Setting('-t', '--test', type=_untyped_function, default=[1]), List[int], False),
+    (22, settngs.Setting('-t', '--test', type=_untyped_function), 'Any', True),
+    (23, settngs.Setting('-t', '--test', type=_untyped_function, default={1}), Set[int], False),
+    (24, settngs.Setting('-t', '--test', action='append', type=int), List[int], True),
+    (25, settngs.Setting('-t', '--test', action='extend', type=int, nargs=2), List[int], True),
+    (26, settngs.Setting('-t', '--test', action='append', type=int, nargs=2), List[List[int]], True),
+    (27, settngs.Setting('-t', '--test', action='extend', nargs='+'), List[str], True),
+    (28, settngs.Setting('-t', '--test', action='extend', type=_typed_list_generic_function), List[test_type], True),
+    (29, settngs.Setting('-t', '--test', action='extend', type=_typed_list_function), List, True),
+    (30, settngs.Setting('-t', '--test', action='extend', type=_typed_set_function), Set, True),
 )
 
 
@@ -700,23 +726,34 @@ settings = (
     (0, lambda parser: parser.add_setting('-t', '--test'), expected_src.format(extra_imports='', typ='str | None')),
     (1, lambda parser: parser.add_setting('-t', '--test', cmdline=False), expected_src.format(extra_imports='import typing\n', typ='typing.Any')),
     (2, lambda parser: parser.add_setting('-t', '--test', default=1, file=True, cmdline=False), expected_src.format(extra_imports='', typ='int')),
-    (3, lambda parser: parser.add_setting('-t', '--test', action='count'), expected_src.format(extra_imports='', typ='int | None')),
-    (4, lambda parser: parser.add_setting('-t', '--test', action='append'), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ='typing.List[str] | None' if sys.version_info < (3, 9) else 'list[str] | None')),
-    (5, lambda parser: parser.add_setting('-t', '--test', action='extend'), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ='typing.List[str] | None' if sys.version_info < (3, 9) else 'list[str] | None')),
-    (6, lambda parser: parser.add_setting('-t', '--test', nargs='+'), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ='typing.List[str] | None' if sys.version_info < (3, 9) else 'list[str] | None')),
-    (7, lambda parser: parser.add_setting('-t', '--test', action='store_const', const=1), expected_src.format(extra_imports='', typ='int | None')),
-    (8, lambda parser: parser.add_setting('-t', '--test', action='append_const', const=1), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ='typing.List[int] | None' if sys.version_info < (3, 9) else 'list[int] | None')),
-    (9, lambda parser: parser.add_setting('-t', '--test', action='store_true'), expected_src.format(extra_imports='', typ='bool')),
-    (10, lambda parser: parser.add_setting('-t', '--test', action='store_false'), expected_src.format(extra_imports='', typ='bool')),
-    (11, lambda parser: parser.add_setting('-t', '--test', action=settngs.BooleanOptionalAction), expected_src.format(extra_imports='', typ='bool | None')),
-    (12, lambda parser: parser.add_setting('-t', '--test', action=_customAction), expected_src.format(extra_imports='import typing\n', typ='typing.Any')),
-    (13, lambda parser: parser.add_setting('-t', '--test', action='help'), no_type_expected_src),
-    (14, lambda parser: parser.add_setting('-t', '--test', action='version'), no_type_expected_src),
-    (15, lambda parser: parser.add_setting('-t', '--test', type=int), expected_src.format(extra_imports='', typ='int | None')),
-    (16, lambda parser: parser.add_setting('-t', '--test', type=_typed_function), expected_src.format(extra_imports='import tests.settngs_test\n', typ='tests.settngs_test.test_type | None')),
-    (17, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=1), expected_src.format(extra_imports='', typ='int')),
-    (18, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=[1]), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ='typing.List[int]' if sys.version_info < (3, 9) else 'list[int]')),
-    (19, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function), expected_src.format(extra_imports='import typing\n', typ='typing.Any')),
+    (3, lambda parser: parser.add_setting('-t', '--test', default='test'), expected_src.format(extra_imports='', typ='str')),
+    (4, lambda parser: parser.add_setting('-t', '--test', default='test', file=True, cmdline=False), expected_src.format(extra_imports='', typ='str')),
+    (5, lambda parser: parser.add_setting('-t', '--test', action='count'), expected_src.format(extra_imports='', typ='int | None')),
+    (6, lambda parser: parser.add_setting('-t', '--test', action='append'), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[str]} | None')),
+    (7, lambda parser: parser.add_setting('-t', '--test', action='extend'), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[str]} | None')),
+    (8, lambda parser: parser.add_setting('-t', '--test', nargs='+'), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[str]} | None')),
+    (9, lambda parser: parser.add_setting('-t', '--test', action='store_const', const=1), expected_src.format(extra_imports='', typ='int | None')),
+    (10, lambda parser: parser.add_setting('-t', '--test', action='append_const', const=1), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[int]} | None')),
+    (11, lambda parser: parser.add_setting('-t', '--test', action='store_true'), expected_src.format(extra_imports='', typ='bool')),
+    (12, lambda parser: parser.add_setting('-t', '--test', action='store_false'), expected_src.format(extra_imports='', typ='bool')),
+    (13, lambda parser: parser.add_setting('-t', '--test', action=settngs.BooleanOptionalAction), expected_src.format(extra_imports='', typ='bool | None')),
+    (14, lambda parser: parser.add_setting('-t', '--test', action=_customAction), expected_src.format(extra_imports='import typing\n', typ='typing.Any')),
+    (15, lambda parser: parser.add_setting('-t', '--test', action='help'), no_type_expected_src),
+    (16, lambda parser: parser.add_setting('-t', '--test', action='version'), no_type_expected_src),
+    (17, lambda parser: parser.add_setting('-t', '--test', type=int), expected_src.format(extra_imports='', typ='int | None')),
+    (18, lambda parser: parser.add_setting('-t', '--test', type=int, nargs='+'), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[int]} | None')),
+    (19, lambda parser: parser.add_setting('-t', '--test', type=_typed_function), expected_src.format(extra_imports='import tests.settngs_test\n', typ='tests.settngs_test.test_type | None')),
+    (20, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=1), expected_src.format(extra_imports='', typ='int')),
+    (21, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=[1]), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[int]}')),
+    (22, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function), expected_src.format(extra_imports='import typing\n', typ='typing.Any')),
+    (23, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default={1}), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{Set[int]}')),
+    (24, lambda parser: parser.add_setting('-t', '--test', action='append', type=int), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[int]} | None')),
+    (25, lambda parser: parser.add_setting('-t', '--test', action='extend', type=int, nargs=2), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[int]} | None')),
+    (26, lambda parser: parser.add_setting('-t', '--test', action='append', type=int, nargs=2), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[List[int]]} | None')),
+    (27, lambda parser: parser.add_setting('-t', '--test', action='extend', nargs='+'), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[str]} | None')),
+    (28, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_list_generic_function), expected_src.format(extra_imports='import typing\n' if sys.version_info < (3, 9) else '', typ=f'{List[test_type]} | None')),
+    (29, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_list_function), expected_src.format(extra_imports='', typ=f'{settngs._type_to_string(List)[0]} | None')),
+    (30, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_set_function), expected_src.format(extra_imports='', typ=f'{settngs._type_to_string(Set)[0]} | None')),
 )
 
 
@@ -760,23 +797,34 @@ settings_dict = (
     (0, lambda parser: parser.add_setting('-t', '--test'), expected_src_dict.format(extra_imports='', typ='str | None')),
     (1, lambda parser: parser.add_setting('-t', '--test', cmdline=False), expected_src_dict.format(extra_imports='', typ='typing.Any')),
     (2, lambda parser: parser.add_setting('-t', '--test', default=1, file=True, cmdline=False), expected_src_dict.format(extra_imports='', typ='int')),
-    (3, lambda parser: parser.add_setting('-t', '--test', action='count'), expected_src_dict.format(extra_imports='', typ='int | None')),
-    (4, lambda parser: parser.add_setting('-t', '--test', action='append'), expected_src_dict.format(extra_imports='', typ='typing.List[str] | None' if sys.version_info < (3, 9) else 'list[str] | None')),
-    (5, lambda parser: parser.add_setting('-t', '--test', action='extend'), expected_src_dict.format(extra_imports='', typ='typing.List[str] | None' if sys.version_info < (3, 9) else 'list[str] | None')),
-    (6, lambda parser: parser.add_setting('-t', '--test', nargs='+'), expected_src_dict.format(extra_imports='', typ='typing.List[str] | None' if sys.version_info < (3, 9) else 'list[str] | None')),
-    (7, lambda parser: parser.add_setting('-t', '--test', action='store_const', const=1), expected_src_dict.format(extra_imports='', typ='int | None')),
-    (8, lambda parser: parser.add_setting('-t', '--test', action='append_const', const=1), expected_src_dict.format(extra_imports='', typ='typing.List[int] | None' if sys.version_info < (3, 9) else 'list[int] | None')),
-    (9, lambda parser: parser.add_setting('-t', '--test', action='store_true'), expected_src_dict.format(extra_imports='', typ='bool')),
-    (10, lambda parser: parser.add_setting('-t', '--test', action='store_false'), expected_src_dict.format(extra_imports='', typ='bool')),
-    (11, lambda parser: parser.add_setting('-t', '--test', action=settngs.BooleanOptionalAction), expected_src_dict.format(extra_imports='', typ='bool | None')),
-    (12, lambda parser: parser.add_setting('-t', '--test', action=_customAction), expected_src_dict.format(extra_imports='', typ='typing.Any')),
-    (13, lambda parser: parser.add_setting('-t', '--test', action='help'), no_type_expected_src_dict),
-    (14, lambda parser: parser.add_setting('-t', '--test', action='version'), no_type_expected_src_dict),
-    (15, lambda parser: parser.add_setting('-t', '--test', type=int), expected_src_dict.format(extra_imports='', typ='int | None')),
-    (16, lambda parser: parser.add_setting('-t', '--test', type=_typed_function), expected_src_dict.format(extra_imports='import tests.settngs_test\n', typ='tests.settngs_test.test_type | None')),
-    (17, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=1), expected_src_dict.format(extra_imports='', typ='int')),
-    (18, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=[1]), expected_src_dict.format(extra_imports='', typ='typing.List[int]' if sys.version_info < (3, 9) else 'list[int]')),
-    (19, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function), expected_src_dict.format(extra_imports='', typ='typing.Any')),
+    (3, lambda parser: parser.add_setting('-t', '--test', default='test'), expected_src_dict.format(extra_imports='', typ='str')),
+    (4, lambda parser: parser.add_setting('-t', '--test', default='test', file=True, cmdline=False), expected_src_dict.format(extra_imports='', typ='str')),
+    (5, lambda parser: parser.add_setting('-t', '--test', action='count'), expected_src_dict.format(extra_imports='', typ='int | None')),
+    (6, lambda parser: parser.add_setting('-t', '--test', action='append'), expected_src_dict.format(extra_imports='', typ=f'{List[str]} | None')),
+    (7, lambda parser: parser.add_setting('-t', '--test', action='extend'), expected_src_dict.format(extra_imports='', typ=f'{List[str]} | None')),
+    (8, lambda parser: parser.add_setting('-t', '--test', nargs='+'), expected_src_dict.format(extra_imports='', typ=f'{List[str]} | None')),
+    (9, lambda parser: parser.add_setting('-t', '--test', action='store_const', const=1), expected_src_dict.format(extra_imports='', typ='int | None')),
+    (10, lambda parser: parser.add_setting('-t', '--test', action='append_const', const=1), expected_src_dict.format(extra_imports='', typ=f'{List[int]} | None')),
+    (11, lambda parser: parser.add_setting('-t', '--test', action='store_true'), expected_src_dict.format(extra_imports='', typ='bool')),
+    (12, lambda parser: parser.add_setting('-t', '--test', action='store_false'), expected_src_dict.format(extra_imports='', typ='bool')),
+    (13, lambda parser: parser.add_setting('-t', '--test', action=settngs.BooleanOptionalAction), expected_src_dict.format(extra_imports='', typ='bool | None')),
+    (14, lambda parser: parser.add_setting('-t', '--test', action=_customAction), expected_src_dict.format(extra_imports='', typ='typing.Any')),
+    (15, lambda parser: parser.add_setting('-t', '--test', action='help'), no_type_expected_src_dict),
+    (16, lambda parser: parser.add_setting('-t', '--test', action='version'), no_type_expected_src_dict),
+    (17, lambda parser: parser.add_setting('-t', '--test', type=int), expected_src_dict.format(extra_imports='', typ='int | None')),
+    (18, lambda parser: parser.add_setting('-t', '--test', type=int, nargs='+'), expected_src_dict.format(extra_imports='', typ=f'{List[int]} | None')),
+    (19, lambda parser: parser.add_setting('-t', '--test', type=_typed_function), expected_src_dict.format(extra_imports='import tests.settngs_test\n', typ=f'{test_type.__module__}.{test_type.__name__} | None')),
+    (20, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=1), expected_src_dict.format(extra_imports='', typ='int')),
+    (21, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=[1]), expected_src_dict.format(extra_imports='', typ=f'{List[int]}')),
+    (22, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function), expected_src_dict.format(extra_imports='', typ='typing.Any')),
+    (23, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default={1}), expected_src_dict.format(extra_imports='', typ=f'{Set[int]}')),
+    (24, lambda parser: parser.add_setting('-t', '--test', action='append', type=int), expected_src_dict.format(extra_imports='', typ=f'{List[int]} | None')),
+    (25, lambda parser: parser.add_setting('-t', '--test', action='extend', type=int, nargs=2), expected_src_dict.format(extra_imports='', typ=f'{List[int]} | None')),
+    (26, lambda parser: parser.add_setting('-t', '--test', action='append', type=int, nargs=2), expected_src_dict.format(extra_imports='', typ=f'{List[List[int]]} | None')),
+    (27, lambda parser: parser.add_setting('-t', '--test', action='extend', nargs='+'), expected_src_dict.format(extra_imports='', typ=f'{List[str]} | None')),
+    (28, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_list_generic_function), expected_src_dict.format(extra_imports='', typ=f'{List[test_type]} | None')),
+    (29, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_list_function), expected_src_dict.format(extra_imports='', typ=f'{settngs._type_to_string(List)[0]} | None')),
+    (30, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_set_function), expected_src_dict.format(extra_imports='', typ=f'{settngs._type_to_string(Set)[0]} | None')),
 )
 
 

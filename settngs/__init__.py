@@ -13,17 +13,22 @@ import warnings
 from argparse import Namespace
 from collections import defaultdict
 from collections.abc import Sequence
+from collections.abc import Set
 from typing import Any
 from typing import Callable
 from typing import cast
+from typing import Collection
 from typing import Dict
 from typing import Generic
+from typing import get_args
 from typing import NoReturn
 from typing import TYPE_CHECKING
 from typing import TypeVar
 from typing import Union
 
 logger = logging.getLogger(__name__)
+
+NoneType = type(None)
 
 if sys.version_info < (3, 11):  # pragma: no cover
     from typing_extensions import NamedTuple
@@ -43,6 +48,8 @@ if sys.version_info < (3, 9):  # pragma: no cover
 
     def get_typing_type(t: type) -> type:
         if t.__module__ == 'builtins':
+            if t is NoneType:
+                return None
             return getattr(typing, t.__name__.title(), t)
         return t
 
@@ -91,8 +98,8 @@ else:  # pragma: no cover
     from argparse import BooleanOptionalAction
     removeprefix = str.removeprefix
 
-    def get_typing_type(t: type) -> type:
-        return t
+    def get_typing_type(t: type) -> type | None:
+        return None if t is NoneType else t
 
 
 def _isnamedtupleinstance(x: Any) -> bool:  # pragma: no cover
@@ -216,47 +223,115 @@ class Setting:
             return NotImplemented
         return self.__dict__ == other.__dict__
 
-    def _guess_type(self) -> tuple[type | str | None, bool]:
-        if isinstance(self.type, type):
-            return self.type, self.default is None
+    __no_type = object()
 
-        __action_to_type = {
-            'store_true': (bool, False),
-            'store_false': (bool, False),
-            BooleanOptionalAction: (bool, self.default is None),
-            'store_const': (type(self.const), self.default is None),
-            'count': (int, self.default is None),
-            'append': (List[str], self.default is None),
-            'extend': (List[str], self.default is None),
-            'append_const': (List[type(self.const)], self.default is None),  # type: ignore[misc]
-            'help': (None, self.default is None),
-            'version': (None, self.default is None),
-        }
+    def _guess_collection(self) -> tuple[type | str | None, bool]:
+        def get_item_type(x: Any) -> type | None:
+            if x is None or not isinstance(x, (Set, Sequence)) or len(x) == 0:
+                t = self._process_type()  # Specifically this is needed when using the extend action
+                if typing.get_args(t):  # We need the item type not the type of the collection
+                    return typing.get_args(t)[0]  # type: ignore[no-any-return]
 
-        if self.action in __action_to_type:
-            return __action_to_type[self.action]
+                # Return None so that we get the default
+                return None if t is None else self.__no_type  # type: ignore[return-value]
+            if isinstance(x, Set):
+                return type(next(iter(x)))
+            return type(x[0])
 
-        if self.type is not None:
-            type_hints = typing.get_type_hints(self.type)
-            if 'return' in type_hints:
-                t: type | str = type_hints['return']
-                return t, self.default is None
+        try:
+            list_type = self._process_type()
+            # if the type is a generic alias than return it immediately
+            if isinstance(list_type, types_GenericAlias) and issubclass(list_type.__origin__, Collection):
+                return list_type, self.default is None
 
-        if self.default is not None:
-            if not isinstance(self.default, str) and not _isnamedtupleinstance(self.default) and isinstance(self.default, Sequence) and self.default and self.default[0]:
+            # Ensure that generic aliases work for python 3.8
+            if list_type is not None:
+                list_type = get_typing_type(list_type)
+            else:
+                list_type = get_typing_type(type(self.default))
+
+            # Default to a list if we don't know what type of collection this is
+            if list_type is None or not issubclass(list_type, Collection):
+                list_type = List
+
+            # Get the item type (int) in list[int]
+            it = get_item_type(self.default)
+            if isinstance(self.type, type):
+                it = self.type
+
+            if it is self.__no_type:
+                return self._process_type() or List[str], self.default is None
+
+            # Try to get the generic alias for this type
+            if it is not None:
                 try:
-                    t = get_typing_type(type(self.default))
-                    ret = cast(type, t[type(self.default[0])]), self.default is None  # type: ignore[index]
+                    ret = cast(type, list_type[it]), self.default is None  # type: ignore[index]
                     return ret
                 except Exception:
                     ...
-            return type(self.default), self.default is None
 
-        if self.cmdline and self.action is None and self.type is None:
-            if self.nargs in ('+', '*') or isinstance(self.nargs, int) and self.nargs > 1:
-                return List[str], self.default is None
-            return str, self.default is None
-        return 'Any', self.default is None
+            # Fall back to list[str] if anything fails
+            return list_type[str], self.default is None  # type: ignore[index]
+        except Exception:
+            return None, self.default is None
+
+    def _process_type(self) -> type | None:
+        if self.type is None:
+            return None
+        if isinstance(self.type, type):
+            return self.type
+
+        return typing.get_type_hints(self.type).get('return', None)  # type: ignore[no-any-return]
+
+    def _guess_type_internal(self) -> tuple[type | str | None, bool]:
+        default_is_none = self.default is None
+        __action_to_type = {
+            'store_true': (bool, False),
+            'store_false': (bool, False),
+            BooleanOptionalAction: (bool, default_is_none),
+            'store_const': (type(self.const), default_is_none),
+            'count': (int, default_is_none),
+            'extend': self._guess_collection(),
+            'append_const': (List[type(self.const)], default_is_none),  # type: ignore[misc]
+            'help': (None, default_is_none),
+            'version': (None, default_is_none),
+        }
+
+        # Process standard actions
+        if self.action in __action_to_type:
+            return __action_to_type[self.action]
+
+        # nargs > 1 is always a list
+        if self.nargs in ('+', '*') or isinstance(self.nargs, int) and self.nargs > 1:
+            return self._guess_collection()
+
+        # Process the type argument
+        type_type = self._process_type()
+        if type_type is not None:
+            return type_type, default_is_none
+
+        # Check if a default value was given.
+        if self.default is not None:
+            if not isinstance(self.default, str) and not _isnamedtupleinstance(self.default) and isinstance(self.default, (Set, Sequence)):
+                return self._guess_collection()
+            # The type argument will convert this if it is a string. We only get here if type is a function without type hints
+            if not (isinstance(self.default, str) and self.type is not None):
+                return type(self.default), default_is_none
+
+        # There is no way to detemine the type from an action
+        if callable(self.action):
+            return 'Any', default_is_none
+
+        # Finally if this is a commandline argument it will default to a string
+        if self.cmdline and self.type is None:
+            return str, default_is_none
+        # For file only settings it will default to Any
+        return 'Any', default_is_none
+
+    def _guess_type(self) -> tuple[type | str | None, bool]:
+        if self.action == 'append':
+            return List[self._guess_type_internal()[0]], self.default is None  # type: ignore[misc]
+        return self._guess_type_internal()
 
     def get_dest(self, prefix: str, names: Sequence[str], dest: str | None) -> tuple[str, str, str, bool]:
         setting_name = None
@@ -316,6 +391,32 @@ if TYPE_CHECKING:
     ns = Namespace | TypedNS | Config[T] | None
 
 
+def _type_to_string(t: type | str) -> tuple[str, str]:
+    type_name = 'Any'
+    import_needed = ''
+    # Take a string as is
+    if isinstance(t, str):
+        type_name = t
+    # Handle generic aliases eg dict[str, str] instead of dict
+    elif isinstance(t, types_GenericAlias):
+        if not get_args(t):
+            t = t.__origin__.__name__
+        type_name = str(t)
+    # Handle standard type objects
+    elif isinstance(t, type):
+        type_name = t.__name__
+        # Builtin types don't need an import
+        if t.__module__ != 'builtins':
+            import_needed = f'import {t.__module__}'
+            # Use the full imported name
+            type_name = t.__module__ + '.' + type_name
+
+    # Expand Any to typing.Any
+    if type_name == 'Any':
+        type_name = 'typing.Any'
+    return type_name, import_needed
+
+
 def generate_ns(definitions: Definitions) -> tuple[str, str]:
     initial_imports = ['from __future__ import annotations', '', 'import settngs']
     imports: Sequence[str] | set[str]
@@ -328,27 +429,8 @@ def generate_ns(definitions: Definitions) -> tuple[str, str]:
             t, noneable = setting._guess_type()
             if t is None:
                 continue
-            # Default to any
-            type_name = 'Any'
-
-            # Take a string as is
-            if isinstance(t, str):
-                type_name = t
-            # Handle generic aliases eg dict[str, str] instead of dict
-            elif isinstance(t, types_GenericAlias):
-                type_name = str(t)
-            # Handle standard type objects
-            elif isinstance(t, type):
-                type_name = t.__name__
-                # Builtin types don't need an import
-                if t.__module__ != 'builtins':
-                    imports.add(f'import {t.__module__}')
-                    # Use the full imported name
-                    type_name = t.__module__ + '.' + type_name
-
-            # Expand Any to typing.Any
-            if type_name == 'Any':
-                type_name = 'typing.Any'
+            type_name, import_needed = _type_to_string(t)
+            imports.add(import_needed)
 
             if noneable and type_name not in ('typing.Any', 'None'):
                 attribute = f'    {setting.internal_name}: {type_name} | None'
@@ -372,7 +454,7 @@ def generate_ns(definitions: Definitions) -> tuple[str, str]:
         initial_imports.append('import typing')
 
     # Remove the possible duplicate typing import
-    imports = sorted(list(imports - {'import typing'}))
+    imports = sorted(imports - {'import typing', ''})
 
     # Merge the imports the ns class definition and the attributes
     return '\n'.join(initial_imports + imports), ns + '\n'.join(attributes)
@@ -392,27 +474,8 @@ def generate_dict(definitions: Definitions) -> tuple[str, str]:
             t, no_default = setting._guess_type()
             if t is None:
                 continue
-            # Default to any
-            type_name = 'Any'
-
-            # Take a string as is
-            if isinstance(t, str):
-                type_name = t
-            # Handle generic aliases eg dict[str, str] instead of dict
-            elif isinstance(t, types_GenericAlias):
-                type_name = str(t)
-            # Handle standard type objects
-            elif isinstance(t, type):
-                type_name = t.__name__
-                # Builtin types don't need an import
-                if t.__module__ != 'builtins':
-                    imports.add(f'import {t.__module__}')
-                    # Use the full imported name
-                    type_name = t.__module__ + '.' + type_name
-
-            # Expand Any to typing.Any
-            if type_name == 'Any':
-                type_name = 'typing.Any'
+            type_name, import_needed = _type_to_string(t)
+            imports.add(import_needed)
 
             if no_default and type_name not in ('typing.Any', 'None'):
                 attribute = f'    {setting.dest}: {type_name} | None'
@@ -429,7 +492,7 @@ def generate_dict(definitions: Definitions) -> tuple[str, str]:
         )
 
     # Remove the possible duplicate typing import
-    imports = sorted(list(imports - {'import typing'}))
+    imports = sorted(list(imports - {'import typing', ''}))
 
     if groups_are_identifiers:
         ns = '\nclass SettngsDict(typing.TypedDict):\n'
