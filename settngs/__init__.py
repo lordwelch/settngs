@@ -21,7 +21,9 @@ from typing import Collection
 from typing import Dict
 from typing import Generic
 from typing import get_args
+from typing import Mapping
 from typing import NoReturn
+from typing import Tuple
 from typing import TYPE_CHECKING
 from typing import TypeVar
 from typing import Union
@@ -365,7 +367,7 @@ class Setting:
         return self.argparse_args, self.filter_argparse_kwargs()
 
 
-class TypedNS:
+class TypedNS(Namespace):
     def __init__(self) -> None:
         raise TypeError('TypedNS cannot be instantiated')
 
@@ -375,7 +377,8 @@ class Group(NamedTuple):
     v: dict[str, Setting]
 
 
-Values = Dict[str, Dict[str, Any]]
+Values = Mapping[str, Any]
+_values = Dict[str, Dict[str, Any]]
 Definitions = Dict[str, Group]
 
 T = TypeVar('T', bound=Union[Values, Namespace, TypedNS])
@@ -388,7 +391,7 @@ class Config(NamedTuple, Generic[T]):
 
 if TYPE_CHECKING:
     ArgParser = Union[argparse._MutuallyExclusiveGroup, argparse._ArgumentGroup, argparse.ArgumentParser]
-    ns = Namespace | TypedNS | Config[T] | None
+    ns = Union[TypedNS, Config[T], None]
 
 
 def _type_to_string(t: type | str) -> tuple[str, str]:
@@ -597,7 +600,7 @@ def normalize_config(
     if not file and not cmdline:
         raise ValueError('Invalid parameters: you must set either file or cmdline to True')
 
-    normalized: Values = {}
+    normalized: dict[str, dict[str, Any]] = {}
     options = config.values
     definitions = _get_internal_definitions(config=config, persistent=persistent)
     for group_name, group in definitions.items():
@@ -665,7 +668,7 @@ def clean_config(
         persistent: Include unknown keys in persistent groups and unknown groups
     """
 
-    cleaned, _ = normalize_config(config, file=file, cmdline=cmdline, default=default, persistent=persistent)
+    cleaned, _ = cast(Config[_values], normalize_config(config, file=file, cmdline=cmdline, default=default, persistent=persistent))
     for group in list(cleaned.keys()):
         if not cleaned[group]:
             del cleaned[group]
@@ -1108,6 +1111,32 @@ def persistent_group(manager: Manager) -> None:
     )
 
 
+class SettngsNS(TypedNS):
+    Example_Group__hello: str
+    Example_Group__save: bool
+    Example_Group__verbose: bool
+
+    persistent__test: bool
+
+
+class Example_Group(typing.TypedDict):
+    hello: str
+    save: bool
+    verbose: bool
+
+
+class persistent(typing.TypedDict):
+    test: bool
+
+
+SettngsDict = typing.TypedDict(
+    'SettngsDict', {
+        'Example Group': Example_Group,
+        'persistent': persistent,
+    },
+)
+
+
 def _main(args: list[str] | None = None) -> None:
     settings_path = pathlib.Path('./settings.json')
     manager = Manager(description='This is an example', epilog='goodbye!')
@@ -1115,11 +1144,11 @@ def _main(args: list[str] | None = None) -> None:
     manager.add_group('Example Group', example_group)
     manager.add_persistent_group('persistent', persistent_group)
 
-    file_config, success = manager.parse_file(settings_path)
+    file_config, success = cast(Tuple[Config[SettngsDict], bool], manager.parse_file(settings_path))
     file_namespace = manager.get_namespace(file_config, file=True, cmdline=True)
 
-    merged_config = manager.parse_cmdline(args=args, config=file_namespace)
-    merged_namespace = manager.get_namespace(merged_config, file=True, cmdline=True)
+    merged_config = cast(Config[SettngsDict], manager.parse_cmdline(args=args, config=file_namespace))
+    merged_namespace = cast(Config[SettngsNS], manager.get_namespace(merged_config, file=True, cmdline=True))
 
     print(f'Hello {merged_config.values["Example Group"]["hello"]}')  # noqa: T201
     if merged_namespace.values.Example_Group__save:

@@ -258,7 +258,7 @@ class TestValues:
         # manager_unknown.add_persistent_group('persistent', lambda parser: parser.add_setting('--world', default='world'))
 
         defaults = manager.defaults()
-        defaults.values['test'] = 'fail'  # type: ignore[assignment] # Not defined in manager, should be removed
+        defaults.values['test'] = 'fail'  # type: ignore[index] # Not defined in manager, should be removed
         defaults.values['persistent']['hello'] = 'success'  # Group is not defined in manager_unknown, should stay
 
         normalized, _ = manager_unknown.normalize_config(defaults.values, file=True)
