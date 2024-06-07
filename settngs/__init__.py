@@ -367,7 +367,7 @@ class Setting:
         return self.argparse_args, self.filter_argparse_kwargs()
 
 
-class TypedNS(Namespace):
+class TypedNS():
     def __init__(self) -> None:
         raise TypeError('TypedNS cannot be instantiated')
 
