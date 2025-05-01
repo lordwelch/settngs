@@ -14,6 +14,7 @@ from argparse import Namespace
 from collections import defaultdict
 from collections.abc import Sequence
 from collections.abc import Set
+from enum import Enum
 from typing import Any
 from typing import Callable
 from typing import cast
@@ -253,7 +254,7 @@ class Setting:
                 list_type = get_typing_type(type(self.default))
 
             # Default to a list if we don't know what type of collection this is
-            if list_type is None or not issubclass(list_type, Collection):
+            if list_type is None or not issubclass(list_type, Collection) or issubclass(list_type, Enum):
                 list_type = List
 
             # Get the item type (int) in list[int]
