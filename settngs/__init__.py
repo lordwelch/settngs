@@ -10,11 +10,13 @@ import re
 import sys
 import typing
 import warnings
+from argparse import BooleanOptionalAction
 from argparse import Namespace
 from collections import defaultdict
 from collections.abc import Sequence
 from collections.abc import Set
 from enum import Enum
+from types import GenericAlias as types_GenericAlias
 from typing import Any
 from typing import Callable
 from typing import cast
@@ -37,72 +39,6 @@ if sys.version_info < (3, 11):  # pragma: no cover
     from typing_extensions import NamedTuple
 else:  # pragma: no cover
     from typing import NamedTuple
-
-
-if sys.version_info < (3, 9):  # pragma: no cover
-    from typing import List
-    from typing import _GenericAlias as types_GenericAlias
-
-    def removeprefix(self: str, prefix: str, /) -> str:
-        if self.startswith(prefix):
-            return self[len(prefix):]
-        else:
-            return self[:]
-
-    def get_typing_type(t: type) -> type:
-        if t.__module__ == 'builtins':
-            if t is NoneType:
-                return None
-            return getattr(typing, t.__name__.title(), t)
-        return t
-
-    class BooleanOptionalAction(argparse.Action):
-        def __init__(
-            self,
-            option_strings,
-            dest,
-            default=None,
-            type=None,  # noqa: A002
-            choices=None,
-            required=False,
-            help=None,  # noqa: A002
-            metavar=None,
-        ):
-
-            _option_strings = []
-            for option_string in option_strings:
-                _option_strings.append(option_string)
-
-                if option_string.startswith('--'):
-                    option_string = '--no-' + option_string[2:]
-                    _option_strings.append(option_string)
-
-            if help is not None and default is not None and default is not argparse.SUPPRESS:
-                help += ' (default: %(default)s)'
-
-            super().__init__(
-                option_strings=_option_strings,
-                dest=dest,
-                nargs=0,
-                default=default,
-                type=type,
-                choices=choices,
-                required=required,
-                help=help,
-                metavar=metavar,
-            )
-
-        def __call__(self, parser, namespace, values, option_string=None):  # pragma: no cover dead: disable
-            if option_string in self.option_strings:
-                setattr(namespace, self.dest, not option_string.startswith('--no-'))
-else:  # pragma: no cover
-    List = list
-    from types import GenericAlias as types_GenericAlias
-    from argparse import BooleanOptionalAction
-    removeprefix = str.removeprefix
-
-    def get_typing_type(t: type) -> type | None:
-        return None if t is NoneType else t
 
 
 def _isnamedtupleinstance(x: Any) -> bool:  # pragma: no cover
@@ -247,15 +183,14 @@ class Setting:
             if isinstance(list_type, types_GenericAlias) and issubclass(list_type.__origin__, Collection):
                 return list_type, self.default is None
 
-            # Ensure that generic aliases work for python 3.8
-            if list_type is not None:
-                list_type = get_typing_type(list_type)
-            else:
-                list_type = get_typing_type(type(self.default))
+            if list_type is NoneType:
+                list_type = None
+            if list_type is None and self.default is not None:
+                list_type = type(self.default)
 
             # Default to a list if we don't know what type of collection this is
             if list_type is None or not issubclass(list_type, Collection) or issubclass(list_type, Enum):
-                list_type = List
+                list_type = list
 
             # Get the item type (int) in list[int]
             it = get_item_type(self.default)
@@ -263,7 +198,7 @@ class Setting:
                 it = self.type
 
             if it is self.__no_type:
-                return self._process_type() or List[str], self.default is None
+                return self._process_type() or list[str], self.default is None
 
             # Try to get the generic alias for this type
             if it is not None:
@@ -295,7 +230,7 @@ class Setting:
             'store_const': (type(self.const), default_is_none),
             'count': (int, default_is_none),
             'extend': self._guess_collection(),
-            'append_const': (List[type(self.const)], default_is_none),  # type: ignore[misc]
+            'append_const': (list[type(self.const)], default_is_none),  # type: ignore[misc]
             'help': (None, default_is_none),
             'version': (None, default_is_none),
         }
@@ -333,7 +268,7 @@ class Setting:
 
     def _guess_type(self) -> tuple[type | str | None, bool]:
         if self.action == 'append':
-            return List[self._guess_type_internal()[0]], self.default is None  # type: ignore[misc]
+            return list[self._guess_type_internal()[0]], self.default is None  # type: ignore[misc]
         return self._guess_type_internal()
 
     def get_dest(self, prefix: str, names: Sequence[str], dest: str | None) -> tuple[str, str, str, bool]:
@@ -550,7 +485,7 @@ def get_options(config: Config[T], group: str) -> dict[str, Any]:
                 if name in internal_names:
                     values[internal_names[name].dest] = value
                 else:
-                    values[removeprefix(name, f'{group}').lstrip('_')] = value
+                    values[name.removeprefix(f'{group}').lstrip('_')] = value
     return values
 
 
