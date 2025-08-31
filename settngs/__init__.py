@@ -209,7 +209,7 @@ class Setting:
                     ...
 
             # Fall back to list[str] if anything fails
-            return list_type[str], self.default is None  # type: ignore[index]
+            return cast(type, list_type[str]), self.default is None  # type: ignore[index]
         except Exception:
             return None, self.default is None
 
@@ -219,7 +219,7 @@ class Setting:
         if isinstance(self.type, type):
             return self.type
 
-        return typing.get_type_hints(self.type).get('return', None)  # type: ignore[no-any-return]
+        return cast(dict[str, type], typing.get_type_hints(self.type)).get('return', None)
 
     def _guess_type_internal(self) -> tuple[type | str | None, bool]:
         default_is_none = self.default is None
@@ -230,7 +230,7 @@ class Setting:
             'store_const': (type(self.const), default_is_none),
             'count': (int, default_is_none),
             'extend': self._guess_collection(),
-            'append_const': (list[type(self.const)], default_is_none),  # type: ignore[misc]
+            'append_const': (cast(type, list[type(self.const)]), default_is_none),  # type: ignore[misc]
             'help': (None, default_is_none),
             'version': (None, default_is_none),
         }
@@ -268,7 +268,7 @@ class Setting:
 
     def _guess_type(self) -> tuple[type | str | None, bool]:
         if self.action == 'append':
-            return list[self._guess_type_internal()[0]], self.default is None  # type: ignore[misc]
+            return cast(type, list[self._guess_type_internal()[0]]), self.default is None  # type: ignore[misc]
         return self._guess_type_internal()
 
     def get_dest(self, prefix: str, names: Sequence[str], dest: str | None) -> tuple[str, str, str, bool]:
