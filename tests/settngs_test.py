@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import ast
-from enum import Enum, auto
 import json
 import pathlib
 import sys
 from collections import defaultdict
+from enum import auto
+from enum import Enum
 from typing import Generator
 from typing import NamedTuple
 
