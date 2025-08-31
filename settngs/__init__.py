@@ -704,11 +704,12 @@ def save_file(
     return True
 
 
-def create_argparser(definitions: Definitions, description: str, epilog: str) -> argparse.ArgumentParser:
+def create_argparser(definitions: Definitions, description: str, epilog: str, *, prog: str | None = None) -> argparse.ArgumentParser:
     """Creates an :class:`argparse.ArgumentParser` from all cmdline settings"""
     groups: dict[str, ArgParser] = {}
     argparser = argparse.ArgumentParser(
         description=description, epilog=epilog, formatter_class=argparse.RawTextHelpFormatter,
+        prog=prog,
     )
 
     def get_current_group(setting: Setting) -> ArgParser:
@@ -749,6 +750,8 @@ def parse_cmdline(
     epilog: str,
     args: list[str] | None = None,
     config: ns[T] = None,
+    *,
+    prog: str | None = None,
 ) -> Config[Values]:
     """
     Creates an `argparse.ArgumentParser` from cmdline settings in `self.definitions`.
@@ -770,7 +773,7 @@ def parse_cmdline(
     else:
         namespace = config
 
-    argparser = create_argparser(definitions, description, epilog)
+    argparser = create_argparser(definitions, description, epilog, prog=prog)
     ns = argparser.parse_args(args, namespace=namespace)
 
     return normalize_config(Config(ns, definitions), cmdline=True, file=True)
@@ -807,11 +810,12 @@ def parse_config(
 class Manager:
     """docstring for Manager"""
 
-    def __init__(self, description: str = '', epilog: str = '', definitions: Definitions | Config[T] | None = None):
+    def __init__(self, description: str = '', epilog: str = '', definitions: Definitions | Config[T] | None = None, *, prog: str | None = None):
         # This one is never used, it just makes MyPy happy
         self.argparser = argparse.ArgumentParser(description=description, epilog=epilog)
         self.description = description
         self.epilog = epilog
+        self.prog = prog
 
         self.definitions: Definitions
         if isinstance(definitions, Config):
@@ -834,7 +838,7 @@ class Manager:
         return generate_dict(self.definitions)
 
     def create_argparser(self) -> None:
-        self.argparser = create_argparser(self.definitions, self.description, self.epilog)
+        self.argparser = create_argparser(self.definitions, self.description, self.epilog, prog=self.prog)
 
     def add_setting(self, *args: Any, **kwargs: Any) -> None:
         """Passes all arguments through to `Setting`, `group` and `exclusive` are already set"""
@@ -1046,7 +1050,6 @@ def example_group(manager: Manager) -> None:
     manager.add_setting(
         '--verbose', '-v',
         default=False,
-        metavar='nothing',
         action=BooleanOptionalAction,  # Added in Python 3.9
     )
 
