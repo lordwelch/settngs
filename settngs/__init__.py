@@ -330,6 +330,17 @@ if TYPE_CHECKING:
     ns = Union[TypedNS, Config[T], None]
 
 
+def _get_import(t: type) -> tuple[str, str]:
+    type_name = t.__name__
+    import_needed = ''
+    # Builtin types don't need an import
+    if t.__module__ != 'builtins':
+        import_needed = f'import {t.__module__}'
+        # Use the full imported name
+        type_name = t.__module__ + '.' + type_name
+    return type_name, import_needed
+
+
 def _type_to_string(t: type | str) -> tuple[str, str]:
     type_name = 'Any'
     import_needed = ''
@@ -338,22 +349,23 @@ def _type_to_string(t: type | str) -> tuple[str, str]:
         type_name = t
     # Handle generic aliases eg dict[str, str] instead of dict
     elif isinstance(t, types_GenericAlias):
-        if not get_args(t):
+        args = get_args(t)
+        if args:
+            import_needed = ''
+            for arg in args:
+                _, arg_import = _get_import(arg)
+                import_needed += '\n' + arg_import
+        else:
             t = t.__origin__.__name__
         type_name = str(t)
     # Handle standard type objects
     elif isinstance(t, type):
-        type_name = t.__name__
-        # Builtin types don't need an import
-        if t.__module__ != 'builtins':
-            import_needed = f'import {t.__module__}'
-            # Use the full imported name
-            type_name = t.__module__ + '.' + type_name
+        type_name, import_needed = _get_import(t)
 
     # Expand Any to typing.Any
     if type_name == 'Any':
         type_name = 'typing.Any'
-    return type_name, import_needed
+    return type_name.strip(), import_needed.strip()
 
 
 def generate_ns(definitions: Definitions) -> tuple[str, str]:
