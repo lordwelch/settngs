@@ -13,20 +13,18 @@ import warnings
 from argparse import BooleanOptionalAction
 from argparse import Namespace
 from collections import defaultdict
+from collections.abc import Callable
+from collections.abc import Collection
+from collections.abc import Mapping
 from collections.abc import Sequence
 from collections.abc import Set
 from enum import Enum
 from types import GenericAlias as types_GenericAlias
 from typing import Any
-from typing import Callable
 from typing import cast
-from typing import Collection
-from typing import Dict
 from typing import Generic
 from typing import get_args
-from typing import Mapping
 from typing import NoReturn
-from typing import Tuple
 from typing import TYPE_CHECKING
 from typing import TypeVar
 from typing import Union
@@ -314,8 +312,8 @@ class Group(NamedTuple):
 
 
 Values = Mapping[str, Any]
-_values = Dict[str, Dict[str, Any]]
-Definitions = Dict[str, Group]
+_values = dict[str, dict[str, Any]]
+Definitions = dict[str, Group]
 
 T = TypeVar('T', bound=Union[Values, Namespace, TypedNS])
 
@@ -1095,7 +1093,7 @@ def _main(args: list[str] | None = None) -> None:
     manager.add_group('Example Group', example_group)
     manager.add_persistent_group('persistent', persistent_group)
 
-    file_config, success = cast(Tuple[Config[SettngsDict], bool], manager.parse_file(settings_path))
+    file_config, success = cast(tuple[Config[SettngsDict], bool], manager.parse_file(settings_path))
     file_namespace = manager.get_namespace(file_config, file=True, cmdline=True)
 
     merged_config = cast(Config[SettngsDict], manager.parse_cmdline(args=args, config=file_namespace))

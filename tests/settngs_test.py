@@ -6,9 +6,9 @@ import json
 import pathlib
 import sys
 from collections import defaultdict
+from collections.abc import Generator
 from enum import auto
 from enum import Enum
-from typing import Generator
 from typing import NamedTuple
 
 import pytest
