@@ -406,7 +406,11 @@ def generate_ns(definitions: Definitions) -> tuple[str, str]:
     imports = sorted(imports - {'import typing', ''})
 
     # Merge the imports the ns class definition and the attributes
-    return '\n'.join(initial_imports + imports), ns + '\n'.join(attributes)
+    i, content = '\n'.join(initial_imports + imports), ns + '\n'.join(attributes)
+    if sys.version_info[:2] == (3, 13):
+        i = i.replace('pathlib._local', 'pathlib')
+        content = content.replace('pathlib._local', 'pathlib')
+    return i, content
 
 
 def generate_dict(definitions: Definitions) -> tuple[str, str]:
@@ -454,7 +458,11 @@ def generate_dict(definitions: Definitions) -> tuple[str, str]:
         ns += '    },\n'
         ns += ')\n'
     # Merge the imports the ns class definition and the attributes
-    return '\n'.join(initial_imports + imports), '\n'.join(classes) + ns + '\n'
+    i, content = '\n'.join(initial_imports + imports), '\n'.join(classes) + ns + '\n'
+    if sys.version_info[:2] == (3, 13):
+        i = i.replace('pathlib._local', 'pathlib')
+        content = content.replace('pathlib._local', 'pathlib')
+    return i, content
 
 
 def sanitize_name(name: str) -> str:

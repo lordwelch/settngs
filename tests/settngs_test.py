@@ -4,7 +4,6 @@ import argparse
 import ast
 import json
 import pathlib
-import sys
 from collections import defaultdict
 from collections.abc import Generator
 from enum import auto
@@ -716,7 +715,7 @@ settings = (
     (6, lambda parser: parser.add_setting('-t', '--test', action='append'), TypeResult(extra_imports='', typ=f'{list[str]} | None')),
     (7, lambda parser: parser.add_setting('-t', '--test', action='extend'), TypeResult(extra_imports='', typ=f'{list[str]} | None')),
     (8, lambda parser: parser.add_setting('-t', '--test', nargs='+'), TypeResult(extra_imports='', typ=f'{list[str]} | None')),
-    (9, lambda parser: parser.add_setting('-t', '--test', nargs='+', type=pathlib.Path), TypeResult(extra_imports='import pathlib._local\n' if sys.version_info[:2] == (3, 13) else 'import pathlib\n', typ=f'{list[pathlib.Path]} | None')),
+    (9, lambda parser: parser.add_setting('-t', '--test', nargs='+', type=pathlib.Path), TypeResult(extra_imports='import pathlib\n', typ='list[pathlib.Path] | None')),
     (10, lambda parser: parser.add_setting('-t', '--test', nargs='+', type=test_enum), TypeResult(extra_imports='import tests.settngs_test\n', typ=f'{list[test_enum]} | None')),
     (11, lambda parser: parser.add_setting('-t', '--test', action='store_const', const=1), TypeResult(extra_imports='', typ='int | None')),
     (12, lambda parser: parser.add_setting('-t', '--test', action='append_const', const=1), TypeResult(extra_imports='', typ=f'{list[int]} | None')),
