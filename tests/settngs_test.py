@@ -20,28 +20,13 @@ from testing.settngs import failure
 from testing.settngs import success
 
 
-if sys.version_info >= (3, 10):  # pragma: no cover
-    List = list
-    Set = set
-    help_output = '''\
+help_output = '''\
 usage: __main__.py [-h] [TEST ...]
 
 positional arguments:
   TEST
 
 options:
-  -h, --help  show this help message and exit
-'''
-else:  # pragma: no cover
-    List = list
-    Set = set
-    help_output = '''\
-usage: __main__.py [-h] [TEST ...]
-
-positional arguments:
-  TEST
-
-optional arguments:
   -h, --help  show this help message and exit
 '''
 
@@ -619,15 +604,15 @@ def _typed_function(something: str) -> test_type:  # pragma: no cover
     return test_type()
 
 
-def _typed_list_generic_function(something: test_type) -> List[test_type]:  # pragma: no cover
+def _typed_list_generic_function(something: test_type) -> list[test_type]:  # pragma: no cover
     return [test_type()]
 
 
-def _typed_list_function() -> List:   # type: ignore[type-arg] # pragma: no cover
+def _typed_list_function() -> list:   # type: ignore[type-arg] # pragma: no cover
     return []
 
 
-def _typed_set_function() -> Set:  # type: ignore[type-arg] # pragma: no cover
+def _typed_set_function() -> set:  # type: ignore[type-arg] # pragma: no cover
     return set()
 
 
@@ -668,32 +653,32 @@ types = (
     (3, settngs.Setting('-t', '--test', default='test'), str, False),
     (4, settngs.Setting('-t', '--test', default='test', file=True, cmdline=False), str, False),
     (5, settngs.Setting('-t', '--test', action='count'), int, True),
-    (6, settngs.Setting('-t', '--test', action='append'), List[str], True),
-    (7, settngs.Setting('-t', '--test', action='extend'), List[str], True),
-    (8, settngs.Setting('-t', '--test', nargs='+'), List[str], True),
-    (9, settngs.Setting('-t', '--test', nargs='+', type=pathlib.Path), List[pathlib.Path], True),
-    (10, settngs.Setting('-t', '--test', nargs='+', type=test_enum), List[test_enum], True),
+    (6, settngs.Setting('-t', '--test', action='append'), list[str], True),
+    (7, settngs.Setting('-t', '--test', action='extend'), list[str], True),
+    (8, settngs.Setting('-t', '--test', nargs='+'), list[str], True),
+    (9, settngs.Setting('-t', '--test', nargs='+', type=pathlib.Path), list[pathlib.Path], True),
+    (10, settngs.Setting('-t', '--test', nargs='+', type=test_enum), list[test_enum], True),
     (11, settngs.Setting('-t', '--test', action='store_const', const=1), int, True),
-    (12, settngs.Setting('-t', '--test', action='append_const', const=1), List[int], True),
+    (12, settngs.Setting('-t', '--test', action='append_const', const=1), list[int], True),
     (13, settngs.Setting('-t', '--test', action='store_true'), bool, False),
     (14, settngs.Setting('-t', '--test', action='store_false'), bool, False),
     (15, settngs.Setting('-t', '--test', action=argparse.BooleanOptionalAction), bool, True),
     (16, settngs.Setting('-t', '--test', action=_customAction), 'Any', True),
     (17, settngs.Setting('-t', '--test', type=test_enum), test_enum, True),
     (18, settngs.Setting('-t', '--test', type=int), int, True),
-    (19, settngs.Setting('-t', '--test', type=int, nargs='+'), List[int], True),
+    (19, settngs.Setting('-t', '--test', type=int, nargs='+'), list[int], True),
     (20, settngs.Setting('-t', '--test', type=_typed_function), test_type, True),
     (21, settngs.Setting('-t', '--test', type=_untyped_function, default=1), int, False),
-    (22, settngs.Setting('-t', '--test', type=_untyped_function, default=[1]), List[int], False),
+    (22, settngs.Setting('-t', '--test', type=_untyped_function, default=[1]), list[int], False),
     (23, settngs.Setting('-t', '--test', type=_untyped_function), 'Any', True),
-    (24, settngs.Setting('-t', '--test', type=_untyped_function, default={1}), Set[int], False),
-    (25, settngs.Setting('-t', '--test', action='append', type=int), List[int], True),
-    (26, settngs.Setting('-t', '--test', action='extend', type=int, nargs=2), List[int], True),
-    (27, settngs.Setting('-t', '--test', action='append', type=int, nargs=2), List[List[int]], True),
-    (28, settngs.Setting('-t', '--test', action='extend', nargs='+'), List[str], True),
-    (29, settngs.Setting('-t', '--test', action='extend', type=_typed_list_generic_function), List[test_type], True),
-    (30, settngs.Setting('-t', '--test', action='extend', type=_typed_list_function), List, True),
-    (31, settngs.Setting('-t', '--test', action='extend', type=_typed_set_function), Set, True),
+    (24, settngs.Setting('-t', '--test', type=_untyped_function, default={1}), set[int], False),
+    (25, settngs.Setting('-t', '--test', action='append', type=int), list[int], True),
+    (26, settngs.Setting('-t', '--test', action='extend', type=int, nargs=2), list[int], True),
+    (27, settngs.Setting('-t', '--test', action='append', type=int, nargs=2), list[list[int]], True),
+    (28, settngs.Setting('-t', '--test', action='extend', nargs='+'), list[str], True),
+    (29, settngs.Setting('-t', '--test', action='extend', type=_typed_list_generic_function), list[test_type], True),
+    (30, settngs.Setting('-t', '--test', action='extend', type=_typed_list_function), list, True),
+    (31, settngs.Setting('-t', '--test', action='extend', type=_typed_set_function), set, True),
     (32, settngs.Setting('-t', '--test', action='help'), None, True),
     (33, settngs.Setting('-t', '--test', action='version'), None, True),
 )
@@ -728,32 +713,32 @@ settings = (
     (3, lambda parser: parser.add_setting('-t', '--test', default='test'), TypeResult(extra_imports='', typ='str')),
     (4, lambda parser: parser.add_setting('-t', '--test', default='test', file=True, cmdline=False), TypeResult(extra_imports='', typ='str')),
     (5, lambda parser: parser.add_setting('-t', '--test', action='count'), TypeResult(extra_imports='', typ='int | None')),
-    (6, lambda parser: parser.add_setting('-t', '--test', action='append'), TypeResult(extra_imports='', typ=f'{List[str]} | None')),
-    (7, lambda parser: parser.add_setting('-t', '--test', action='extend'), TypeResult(extra_imports='', typ=f'{List[str]} | None')),
-    (8, lambda parser: parser.add_setting('-t', '--test', nargs='+'), TypeResult(extra_imports='', typ=f'{List[str]} | None')),
-    (9, lambda parser: parser.add_setting('-t', '--test', nargs='+', type=pathlib.Path), TypeResult(extra_imports='import pathlib._local\n' if sys.version_info[:2] == (3, 13) else 'import pathlib\n', typ=f'{List[pathlib.Path]} | None')),
-    (10, lambda parser: parser.add_setting('-t', '--test', nargs='+', type=test_enum), TypeResult(extra_imports='import tests.settngs_test\n', typ=f'{List[test_enum]} | None')),
+    (6, lambda parser: parser.add_setting('-t', '--test', action='append'), TypeResult(extra_imports='', typ=f'{list[str]} | None')),
+    (7, lambda parser: parser.add_setting('-t', '--test', action='extend'), TypeResult(extra_imports='', typ=f'{list[str]} | None')),
+    (8, lambda parser: parser.add_setting('-t', '--test', nargs='+'), TypeResult(extra_imports='', typ=f'{list[str]} | None')),
+    (9, lambda parser: parser.add_setting('-t', '--test', nargs='+', type=pathlib.Path), TypeResult(extra_imports='import pathlib._local\n' if sys.version_info[:2] == (3, 13) else 'import pathlib\n', typ=f'{list[pathlib.Path]} | None')),
+    (10, lambda parser: parser.add_setting('-t', '--test', nargs='+', type=test_enum), TypeResult(extra_imports='import tests.settngs_test\n', typ=f'{list[test_enum]} | None')),
     (11, lambda parser: parser.add_setting('-t', '--test', action='store_const', const=1), TypeResult(extra_imports='', typ='int | None')),
-    (12, lambda parser: parser.add_setting('-t', '--test', action='append_const', const=1), TypeResult(extra_imports='', typ=f'{List[int]} | None')),
+    (12, lambda parser: parser.add_setting('-t', '--test', action='append_const', const=1), TypeResult(extra_imports='', typ=f'{list[int]} | None')),
     (13, lambda parser: parser.add_setting('-t', '--test', action='store_true'), TypeResult(extra_imports='', typ='bool')),
     (14, lambda parser: parser.add_setting('-t', '--test', action='store_false'), TypeResult(extra_imports='', typ='bool')),
     (15, lambda parser: parser.add_setting('-t', '--test', action=argparse.BooleanOptionalAction), TypeResult(extra_imports='', typ='bool | None')),
     (16, lambda parser: parser.add_setting('-t', '--test', action=_customAction), TypeResult(extra_imports='import typing\n', typ='typing.Any')),
     (17, lambda parser: parser.add_setting('-t', '--test', type=test_enum), TypeResult(extra_imports='import tests.settngs_test\n', typ='tests.settngs_test.test_enum | None')),
     (18, lambda parser: parser.add_setting('-t', '--test', type=int), TypeResult(extra_imports='', typ='int | None')),
-    (19, lambda parser: parser.add_setting('-t', '--test', type=int, nargs='+'), TypeResult(extra_imports='', typ=f'{List[int]} | None')),
+    (19, lambda parser: parser.add_setting('-t', '--test', type=int, nargs='+'), TypeResult(extra_imports='', typ=f'{list[int]} | None')),
     (20, lambda parser: parser.add_setting('-t', '--test', type=_typed_function), TypeResult(extra_imports='import tests.settngs_test\n', typ='tests.settngs_test.test_type | None')),
     (21, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=1), TypeResult(extra_imports='', typ='int')),
-    (22, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=[1]), TypeResult(extra_imports='', typ=f'{List[int]}')),
+    (22, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default=[1]), TypeResult(extra_imports='', typ=f'{list[int]}')),
     (23, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function), TypeResult(extra_imports='import typing\n', typ='typing.Any')),
-    (24, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default={1}), TypeResult(extra_imports='', typ=f'{Set[int]}')),
-    (25, lambda parser: parser.add_setting('-t', '--test', action='append', type=int), TypeResult(extra_imports='', typ=f'{List[int]} | None')),
-    (26, lambda parser: parser.add_setting('-t', '--test', action='extend', type=int, nargs=2), TypeResult(extra_imports='', typ=f'{List[int]} | None')),
-    (27, lambda parser: parser.add_setting('-t', '--test', action='append', type=int, nargs=2), TypeResult(extra_imports='', typ=f'{List[List[int]]} | None')),
-    (28, lambda parser: parser.add_setting('-t', '--test', action='extend', nargs='+'), TypeResult(extra_imports='', typ=f'{List[str]} | None')),
-    (29, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_list_generic_function), TypeResult(extra_imports='import tests.settngs_test\n', typ=f'{List[test_type]} | None')),
-    (30, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_list_function), TypeResult(extra_imports='', typ=f'{settngs._type_to_string(List)[0]} | None')),
-    (31, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_set_function), TypeResult(extra_imports='', typ=f'{settngs._type_to_string(Set)[0]} | None')),
+    (24, lambda parser: parser.add_setting('-t', '--test', type=_untyped_function, default={1}), TypeResult(extra_imports='', typ=f'{set[int]}')),
+    (25, lambda parser: parser.add_setting('-t', '--test', action='append', type=int), TypeResult(extra_imports='', typ=f'{list[int]} | None')),
+    (26, lambda parser: parser.add_setting('-t', '--test', action='extend', type=int, nargs=2), TypeResult(extra_imports='', typ=f'{list[int]} | None')),
+    (27, lambda parser: parser.add_setting('-t', '--test', action='append', type=int, nargs=2), TypeResult(extra_imports='', typ=f'{list[list[int]]} | None')),
+    (28, lambda parser: parser.add_setting('-t', '--test', action='extend', nargs='+'), TypeResult(extra_imports='', typ=f'{list[str]} | None')),
+    (29, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_list_generic_function), TypeResult(extra_imports='import tests.settngs_test\n', typ=f'{list[test_type]} | None')),
+    (30, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_list_function), TypeResult(extra_imports='', typ=f'{settngs._type_to_string(list)[0]} | None')),
+    (31, lambda parser: parser.add_setting('-t', '--test', action='extend', type=_typed_set_function), TypeResult(extra_imports='', typ=f'{settngs._type_to_string(set)[0]} | None')),
 )
 
 
